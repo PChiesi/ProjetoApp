@@ -41,6 +41,9 @@ build.bat            :: gera dist\AutoMassaStudio\AutoMassaStudio.exe (inicia ma
 build.bat onefile    :: gera um único dist\AutoMassaStudio.exe
 ```
 
+### Rodar sem gerar o .exe
+Duplo clique em **`INICIAR.bat`** (na primeira vez instala as dependências automaticamente).
+
 ### Rodar a partir do código (desenvolvimento)
 ```bat
 pip install -r requirements.txt

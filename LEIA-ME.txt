@@ -1,0 +1,23 @@
+AutoMassa Studio - como rodar no Windows
+========================================
+
+OPCAO 1 - Usar direto (recomendado para comecar)
+  1. Instale o Python 3.10 ou mais novo: https://www.python.org/downloads/
+     -> na instalacao, marque "Add python.exe to PATH".
+  2. Descompacte este zip numa pasta (ex.: C:\AutoMassa).
+  3. De duplo clique em INICIAR.bat
+     - Na primeira vez ele instala as dependencias (precisa de internet, alguns minutos).
+     - Nas proximas vezes abre direto.
+
+OPCAO 2 - Gerar o executavel (.exe)
+  1. Com o Python instalado, de duplo clique em build.bat
+  2. O programa fica em: dist\AutoMassaStudio\AutoMassaStudio.exe
+     (essa pasta "dist\AutoMassaStudio" pode ser copiada para outras maquinas,
+      que nao precisam ter Python)
+  - Para gerar um unico arquivo .exe: abra o cmd na pasta e rode  build.bat onefile
+
+Navegador para sistemas web: usa o Microsoft Edge (padrao) ou o Google Chrome ja instalados.
+
+Atalhos: F5 executar | F9 pausar/retomar | F10 parar | Ctrl+S salvar
+
+Guia completo de uso: README.md
