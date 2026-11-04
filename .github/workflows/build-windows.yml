@@ -1,0 +1,37 @@
+name: Gerar executável Windows
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Testes
+        run: python -m pytest -q tests/test_core.py
+
+      - name: PyInstaller (pasta)
+        run: pyinstaller --noconfirm --clean automassa.spec
+
+      - name: Compactar
+        run: Compress-Archive -Path dist/AutoMassaStudio -DestinationPath AutoMassaStudio-windows.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AutoMassaStudio-windows
+          path: AutoMassaStudio-windows.zip
+          retention-days: 30
