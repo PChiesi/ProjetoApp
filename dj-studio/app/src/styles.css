@@ -334,3 +334,11 @@ kbd { background: var(--panel-2); border: 1px solid var(--line); border-bottom-w
 .btn.tiny.pfl { min-width: 40px; }
 .btn.tiny.pfl.on { background: var(--warn); color: #0d0e14; border-color: var(--warn); }
 .lib-row.selected { box-shadow: inset 3px 0 0 var(--warn); background: color-mix(in srgb, var(--warn) 8%, transparent); }
+
+/* ---------- efeitos ao vivo ---------- */
+.deck-fx { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 8px; }
+.fx-label { font-size: 11px; font-weight: 900; letter-spacing: 0.1em; color: var(--muted); }
+.fx-types, .fx-divs { display: flex; gap: 2px; background: var(--panel-2); border-radius: 999px; padding: 2px; }
+.fx-types .chip, .fx-divs .chip { min-height: 28px; padding: 4px 10px; font-size: 12px; }
+.deck-fx .knob-readout { display: none; }
+.btn.fx-on.on { background: var(--good); color: #0d0e14; border-color: var(--good); }

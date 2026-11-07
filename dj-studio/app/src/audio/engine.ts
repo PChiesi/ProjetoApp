@@ -5,6 +5,23 @@ import { beatPhase, phaseDelta, syncRate, type Grid } from './beat';
 import type { Waveform } from './analysis';
 import type { Section } from '../studio/edit';
 import { createShifter, loadKeyLock } from './keylock';
+import { impulse } from '../studio/render';
+
+export type DeckFxType = 'eco' | 'reverb' | 'flanger' | 'picotar';
+export interface DeckFxState {
+  type: DeckFxType;
+  on: boolean;
+  /** 0..1 */
+  amount: number;
+  /** Eco: fração da batida (0.5, 0.75, 1). */
+  div: number;
+}
+export const DECK_FX: Record<DeckFxType, { name: string; desc: string }> = {
+  eco: { name: 'Eco', desc: 'Repete o som no tempo; ao desligar, o eco continua sumindo sozinho.' },
+  reverb: { name: 'Reverb', desc: 'Ambiente de salão. Ótimo para sair de uma música.' },
+  flanger: { name: 'Flanger', desc: 'Som de "avião passando", em ciclos de 2 compassos.' },
+  picotar: { name: 'Picotar', desc: 'Liga e desliga o som em colcheias, no tempo da música.' },
+};
 
 export type DeckId = 'A' | 'B';
 
@@ -55,6 +72,17 @@ class Channel {
 
   /** Envio para o fone (pré-escuta): depois do EQ/filtro, antes do volume. */
   readonly cueSend: GainNode;
+  // ---- efeitos ao vivo (depois do filtro, antes do volume) ----
+  readonly gate: GainNode;
+  readonly gateDepth: GainNode;
+  readonly gateLfo: OscillatorNode;
+  readonly ecoSend: GainNode;
+  readonly ecoDelay: DelayNode;
+  readonly ecoFb: GainNode;
+  readonly revSend: GainNode;
+  readonly flSend: GainNode;
+  readonly flDelay: DelayNode;
+  readonly flLfo: OscillatorNode;
 
   constructor(ctx: AudioContext, out: AudioNode, cueBus: AudioNode) {
     this.input = ctx.createGain();
@@ -76,7 +104,45 @@ class Channel {
     this.xfade = ctx.createGain();
     this.meter = ctx.createAnalyser();
     this.meter.fftSize = 1024;
-    this.input.connect(this.low).connect(this.mid).connect(this.high).connect(this.filter).connect(this.fader);
+    this.input.connect(this.low).connect(this.mid).connect(this.high).connect(this.filter);
+    // Picotar: um LFO quadrado modula o ganho
+    this.gate = ctx.createGain();
+    this.gateDepth = ctx.createGain();
+    this.gateDepth.gain.value = 0;
+    this.gateLfo = ctx.createOscillator();
+    this.gateLfo.type = 'square';
+    this.gateLfo.connect(this.gateDepth).connect(this.gate.gain);
+    this.gateLfo.start();
+    this.filter.connect(this.gate).connect(this.fader);
+    // Eco (envio com realimentação)
+    this.ecoSend = ctx.createGain();
+    this.ecoSend.gain.value = 0;
+    this.ecoDelay = ctx.createDelay(4);
+    this.ecoFb = ctx.createGain();
+    this.gate.connect(this.ecoSend).connect(this.ecoDelay);
+    this.ecoDelay.connect(this.ecoFb).connect(this.ecoDelay);
+    this.ecoDelay.connect(this.fader);
+    // Reverb
+    this.revSend = ctx.createGain();
+    this.revSend.gain.value = 0;
+    const conv = ctx.createConvolver();
+    conv.buffer = impulse(ctx, 2.8);
+    this.gate.connect(this.revSend).connect(conv).connect(this.fader);
+    // Flanger (atraso curtinho oscilando)
+    this.flSend = ctx.createGain();
+    this.flSend.gain.value = 0;
+    this.flDelay = ctx.createDelay(0.02);
+    this.flDelay.delayTime.value = 0.004;
+    this.flLfo = ctx.createOscillator();
+    const flDepth = ctx.createGain();
+    flDepth.gain.value = 0.0032;
+    this.flLfo.connect(flDepth).connect(this.flDelay.delayTime);
+    this.flLfo.start();
+    const flFb = ctx.createGain();
+    flFb.gain.value = 0.55;
+    this.gate.connect(this.flSend).connect(this.flDelay);
+    this.flDelay.connect(flFb).connect(this.flDelay);
+    this.flDelay.connect(this.fader);
     this.cueSend = ctx.createGain();
     this.cueSend.gain.value = 0;
     this.filter.connect(this.cueSend).connect(cueBus);
@@ -135,6 +201,7 @@ export class Deck {
 
   position(): number {
     if (!this.playing) return this.offset;
+    if (this.braking) return this.offset;
     let p = this.offset + (this.ctx.currentTime - this.anchor) * this.playbackRate;
     const l = this.loop;
     if (l && p > l.end) p = l.start + ((p - l.start) % (l.end - l.start));
@@ -340,6 +407,32 @@ export class Deck {
     this.updatePitch();
   }
 
+  private braking = false;
+  /** Freio de vinil: a música desacelera até parar em ~2 batidas. */
+  brake() {
+    if (!this.playing || !this.source || this.braking) return;
+    const t = this.ctx.currentTime;
+    const dur = Math.max(0.5, (2 * 60) / (this.bpm || 120));
+    this.offset = this.position();
+    this.anchor = t;
+    this.braking = true;
+    const src = this.source;
+    src.playbackRate.cancelScheduledValues(t);
+    src.playbackRate.setValueAtTime(this.playbackRate, t);
+    src.playbackRate.linearRampToValueAtTime(0.001, t + dur);
+    if (this.shifter) this.shifter.parameters.get('pitch')!.setValueAtTime(1, t); // o tom cai junto: é o efeito
+    const startRate = this.playbackRate;
+    window.setTimeout(() => {
+      // posição final = metade do que andaria (rampa linear até parar)
+      this.offset = Math.min(this.track?.duration ?? 0, this.offset + (dur * startRate) / 2);
+      this.stopSource();
+      this.playing = false;
+      this.braking = false;
+      this.updatePitch();
+      this.changed();
+    }, dur * 1000);
+  }
+
   /** Prato da controladora: girando com a música tocando acelera/freia; parada, arrasta a agulha. */
   jog(delta: number) {
     if (!this.track) return;
@@ -468,6 +561,11 @@ export class AudioEngine {
   };
   /** Iguala o volume das músicas automaticamente. */
   autoGain = true;
+  /** Efeito ao vivo de cada deck. */
+  fx: Record<DeckId, DeckFxState> = {
+    A: { type: 'eco', on: false, amount: 0.5, div: 0.75 },
+    B: { type: 'eco', on: false, amount: 0.5, div: 0.75 },
+  };
   private bus: GainNode;
   private limiter: DynamicsCompressorNode;
   private masterGain: GainNode;
@@ -617,6 +715,20 @@ export class AudioEngine {
         s(ch.filter.Q, 1.2);
       }
       s(ch.fader.gain, Math.pow(this.mix.volume[id], 1.6));
+      // efeitos ao vivo, no tempo do deck
+      const fx = this.fx[id];
+      const beat = 60 / (this.decks[id].bpm || 120);
+      const on = (k: DeckFxType) => fx.on && fx.type === k;
+      s(ch.ecoSend.gain, on('eco') ? 0.25 + fx.amount * 0.75 : 0);
+      s(ch.ecoFb.gain, 0.3 + fx.amount * 0.35);
+      s(ch.ecoDelay.delayTime, Math.min(3.9, beat * fx.div));
+      s(ch.revSend.gain, on('reverb') ? fx.amount * 1.3 : 0);
+      s(ch.flSend.gain, on('flanger') ? 0.4 + fx.amount * 0.6 : 0);
+      s(ch.flLfo.frequency, 1 / (beat * 8));
+      const depth = on('picotar') ? 0.3 + fx.amount * 0.7 : 0;
+      s(ch.gate.gain, 1 - depth / 2);
+      s(ch.gateDepth.gain, depth / 2);
+      s(ch.gateLfo.frequency, 2 / beat);
       s(ch.xfade.gain, this.xfGain(id));
     }
     this.masterGain && s(this.masterGain.gain, this.mix.master);
@@ -733,6 +845,12 @@ export class AudioEngine {
     s.buffer = buffer;
     s.connect(this.samplerOut);
     s.start();
+  }
+
+  setFx(id: DeckId, patch: Partial<DeckFxState>) {
+    this.fx = { ...this.fx, [id]: { ...this.fx[id], ...patch } };
+    this.applyAll();
+    this.emit();
   }
 
   setAutoGain(on: boolean) {

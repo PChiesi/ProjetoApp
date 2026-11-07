@@ -4,6 +4,7 @@ import { beatInfo, camelotMatch } from '../audio/beat';
 import { fmtTime, useFrame } from '../hooks';
 import { Level } from './Level';
 import { Pads } from './Pads';
+import { DeckFxPanel } from './DeckFxPanel';
 
 interface Props {
   engine: AudioEngine;
@@ -193,6 +194,7 @@ export function DeckPanel({ engine, id, onDropTrack, onDropFiles, onSyncFail }: 
 
       <Level n={2}>
         <Pads deck={deck} />
+        <DeckFxPanel engine={engine} id={id} />
       </Level>
 
       <Level n={3}>

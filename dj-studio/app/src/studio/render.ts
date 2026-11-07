@@ -35,7 +35,7 @@ function reversedSlice(ctx: BaseAudioContext, buf: AudioBuffer, start: number, d
   return out;
 }
 
-function impulse(ctx: BaseAudioContext, seconds = 2.4): AudioBuffer {
+export function impulse(ctx: BaseAudioContext, seconds = 2.4): AudioBuffer {
   const sr = ctx.sampleRate;
   const n = Math.floor(sr * seconds);
   const b = ctx.createBuffer(2, n, sr);
