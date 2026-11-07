@@ -839,12 +839,34 @@ export class AudioEngine {
     return 'setSinkId' in this.ctx;
   }
 
-  /** Toca um som do sampler no tempo agora. */
+  /** Sampler "no tempo": espera a próxima meia batida do deck que está no ar. */
+  samplerQuantize = true;
+
+  /** Toca um som do sampler (no tempo da música, se houver um deck tocando). */
   playSample(buffer: AudioBuffer) {
     const s = this.ctx.createBufferSource();
     s.buffer = buffer;
     s.connect(this.samplerOut);
-    s.start();
+    s.start(this.samplerQuantize ? this.nextSubBeat(0.5) : 0);
+  }
+
+  setSamplerVolume(v: number) {
+    this.samplerOut.gain.setTargetAtTime(v, this.ctx.currentTime, 0.01);
+  }
+
+  /** Instante (ctx) da próxima subdivisão de batida do deck mais audível que está tocando. */
+  nextSubBeat(fraction: number): number {
+    const now = this.ctx.currentTime;
+    const live = (['A', 'B'] as DeckId[]).filter((d) => this.decks[d].playing && this.decks[d].track).sort((x, y) => this.audibility(y) - this.audibility(x))[0];
+    if (!live) return 0;
+    const d = this.decks[live];
+    const g = d.grid!;
+    const step = (60 / g.bpm) * fraction;
+    const pos = d.position();
+    const k = Math.ceil((pos - g.firstBeat) / step - 0.02); // tolerância: se acabou de passar, toca já
+    const target = g.firstBeat + k * step;
+    const wait = Math.max(0, (target - pos) / d.playbackRate);
+    return wait < 0.01 ? 0 : now + wait;
   }
 
   setFx(id: DeckId, patch: Partial<DeckFxState>) {

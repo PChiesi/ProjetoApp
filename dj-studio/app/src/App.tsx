@@ -15,6 +15,7 @@ import { OverviewWaveform, ScrollingWaveform } from './components/Waveform';
 import { LEVEL_NAMES, LevelContext, type SkillLevel } from './components/Level';
 import { fmtTime, storageGet, storageSet, useEngine, useFrame } from './hooks';
 import { Studio } from './studio/Studio';
+import { Sampler, SAMPLER_KEYS } from './components/Sampler';
 import { SoundBank } from './studio/sounds';
 
 const engine = new AudioEngine();
@@ -61,6 +62,7 @@ export default function App() {
   const [lastMsg, setLastMsg] = useState('');
   const [libSel, setLibSel] = useState<string | null>(null);
   const syncFailRef = useRef<(id: DeckId) => void>(() => {});
+  const samplerRef = useRef<(i: number) => void>(() => {});
   const midiRef = useRef<(action: string, value: number) => void>(() => {});
   const learnRef = useRef<string | null>(null);
   learnRef.current = learning;
@@ -258,8 +260,12 @@ export default function App() {
       setLibSel(next.id);
     } else if (what.startsWith('sampler')) {
       if (!press) return;
-      const snd = bank.all()[Number(what.slice(7))];
-      if (snd) engine.playSample(snd.buffer);
+      const n = Number(what.slice(7));
+      if (n < 8) samplerRef.current(n);
+      else {
+        const snd = bank.all()[n - 8];
+        if (snd) engine.playSample(snd.buffer);
+      }
     }
   };
 
@@ -412,6 +418,13 @@ export default function App() {
         '?': () => setHelp((h) => !h),
         escape: () => setHelp(false),
       };
+      const sp = SAMPLER_KEYS.indexOf(k);
+      if (sp >= 0 && !e.repeat) {
+        e.preventDefault();
+        engine.resume();
+        samplerRef.current(sp);
+        return;
+      }
       const fn = map[k];
       if (fn && !e.repeat) {
         e.preventDefault();
@@ -545,6 +558,8 @@ export default function App() {
           </div>
         </main>
 
+        <Sampler engine={engine} bank={bank} padsRef={samplerRef} />
+
         <div className={`coach ${tip ? `tone-${tip.tone}` : ''}`} role="status" aria-live="polite">
           <span className="coach-icon" aria-hidden>
             {tip?.tone === 'warn' ? '⚠️' : tip?.tone === 'good' ? '✨' : '💡'}
@@ -608,6 +623,7 @@ export default function App() {
                   <p><kbd>Z</kbd> <kbd>X</kbd> Crossfader ← →</p>
                   <p><kbd>C</kbd> Crossfader no meio</p>
                   <p><kbd>R</kbd> Gravar</p>
+                  <p><kbd>A</kbd>…<kbd>K</kbd> Pads do sampler</p>
                   <p>Duplo clique num botão giratório volta ao centro</p>
                 </div>
               </div>

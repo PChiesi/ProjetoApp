@@ -342,3 +342,20 @@ kbd { background: var(--panel-2); border: 1px solid var(--line); border-bottom-w
 .fx-types .chip, .fx-divs .chip { min-height: 28px; padding: 4px 10px; font-size: 12px; }
 .deck-fx .knob-readout { display: none; }
 .btn.fx-on.on { background: var(--good); color: #0d0e14; border-color: var(--good); }
+
+/* ---------- sampler ---------- */
+.sampler { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; flex-wrap: wrap; }
+.sampler-pads { display: grid; grid-template-columns: repeat(8, minmax(84px, 1fr)); gap: 6px; flex: 1; }
+.sp-wrap { position: relative; }
+.sp { width: 100%; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 6px; padding: 7px 8px; border-radius: 9px; border: 1px solid rgba(255, 138, 0, 0.45); background: rgba(255, 138, 0, 0.1); cursor: pointer; font-weight: 700; font-size: 12px; min-height: 40px; transition: transform 0.05s, background 0.1s; }
+.sp.user { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.sp.empty { border-style: dashed; border-color: var(--line); background: transparent; color: var(--muted); }
+.sp.hit { transform: scale(0.94); background: #ff8a00; color: #0d0e14; }
+.sp-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.sp kbd { font-size: 10px; padding: 0 5px; }
+.sp-menu { position: absolute; bottom: 100%; left: 0; z-index: 20; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 4px; display: flex; flex-direction: column; min-width: 170px; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+.sp-menu button { background: none; border: none; text-align: left; padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.sp-menu button:hover { background: var(--panel); }
+.sp-opt { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); font-weight: 700; }
+.sp-opt input[type=range] { width: 90px; }
+@media (max-width: 1100px) { .sampler-pads { grid-template-columns: repeat(4, minmax(84px, 1fr)); } }
