@@ -9,6 +9,7 @@ import { AlignMeter, Mixer } from './components/Mixer';
 import { OverviewWaveform, ScrollingWaveform } from './components/Waveform';
 import { LEVEL_NAMES, LevelContext, type SkillLevel } from './components/Level';
 import { fmtTime, storageGet, storageSet, useEngine, useFrame } from './hooks';
+import { Studio } from './studio/Studio';
 
 const engine = new AudioEngine();
 
@@ -31,6 +32,10 @@ export default function App() {
   const [help, setHelp] = useState(false);
   const [zoom, setZoom] = useState(110);
   const [dragFiles, setDragFiles] = useState(false);
+  const [view, setView] = useState<'decks' | 'studio'>('decks');
+  const [studioTrack, setStudioTrack] = useState<Track | null>(null);
+  const viewRef = useRef(view);
+  viewRef.current = view;
   const recRef = useRef<HTMLSpanElement>(null);
 
   const toast = useCallback((text: string, stars?: number) => {
@@ -180,6 +185,7 @@ export default function App() {
   useEffect(() => {
     const isTyping = (e: KeyboardEvent) => e.target instanceof HTMLInputElement && e.target.type !== 'range';
     const down = (e: KeyboardEvent) => {
+      if (viewRef.current === 'studio') return; // o Estúdio tem os próprios atalhos
       if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
       const k = e.key.toLowerCase();
       const A = engine.decks.A;
@@ -257,6 +263,22 @@ export default function App() {
             Pista
             {name && <span className="hello">· bora tocar, {name}!</span>}
           </div>
+          <div className="view-tabs" role="tablist" aria-label="Área">
+            <button role="tab" aria-selected={view === 'decks'} className={`tab ${view === 'decks' ? 'on' : ''}`} onClick={() => setView('decks')}>
+              🎧 Tocar
+            </button>
+            <button
+              role="tab"
+              aria-selected={view === 'studio'}
+              className={`tab ${view === 'studio' ? 'on' : ''}`}
+              onClick={() => {
+                if (!studioTrack) setStudioTrack(engine.decks.A.track ?? tracks[0] ?? null);
+                setView('studio');
+              }}
+            >
+              ✂ Estúdio
+            </button>
+          </div>
           <div className="top-actions">
             <div className="level-switch" role="radiogroup" aria-label="Nível">
               {([1, 2, 3] as SkillLevel[]).map((l) => (
@@ -274,6 +296,16 @@ export default function App() {
           </div>
         </header>
 
+        {view === 'studio' && studioTrack ? (
+          <Studio
+            engine={engine}
+            track={studioTrack}
+            onExit={() => setView('decks')}
+            onSaved={(t) => setTracks((ts) => [...ts, t])}
+            toast={toast}
+          />
+        ) : (
+        <>
         <div className="waves">
           {(['A', 'B'] as DeckId[]).map((id) => (
             <div key={id} className={`wave-row wave-${id.toLowerCase()}`} onWheel={(e) => setZoom((z) => Math.max(40, Math.min(400, z * (e.deltaY > 0 ? 0.9 : 1.1))))}>
@@ -313,7 +345,13 @@ export default function App() {
           </button>
         </div>
 
-        <Library engine={engine} tracks={tracks} pending={pending} onLoad={loadToDeck} onFiles={(f) => addFiles(f)} />
+        </>
+        )}
+
+        <Library engine={engine} tracks={tracks} pending={pending} onLoad={loadToDeck} onFiles={(f) => addFiles(f)} onEdit={(t) => {
+          setStudioTrack(t);
+          setView('studio');
+        }} editing={view === 'studio' ? studioTrack?.id : undefined} />
 
         <div className="toasts" aria-live="polite">
           {toasts.map((t) => (

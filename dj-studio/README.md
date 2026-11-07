@@ -9,6 +9,8 @@ Plano completo: [`PLANO.md`](PLANO.md).
 
 Atalhos: aperte <kbd>?</kbd> dentro do app.
 
+**Estúdio:** clique em ✎ ao lado de uma música (ou na aba "✂ Estúdio") para cortar, repetir e estender trechos, fazer fades e salvar a sua versão — ela volta para a biblioteca pronta para tocar.
+
 ## Para desenvolver
 ```bash
 cd app
@@ -21,4 +23,5 @@ npm run release   # testa, gera e atualiza ../Pista.html
 Estrutura:
 - `app/src/audio/` — motor de áudio (decks, mixer, gravação), análise (BPM, "1" do compasso, ondas) e músicas demo sintetizadas
 - `app/src/coach/` — dicas e avaliação das transições
+- `app/src/studio/` — Estúdio: modelo de edição por blocos (`edit.ts`), reprodução/exportação (`render.ts`) e a tela
 - `app/src/components/` — decks, mixer, ondas, biblioteca, knobs

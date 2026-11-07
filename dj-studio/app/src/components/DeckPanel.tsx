@@ -3,6 +3,7 @@ import type { AudioEngine, DeckId } from '../audio/engine';
 import { beatInfo, camelotMatch } from '../audio/beat';
 import { fmtTime, useFrame } from '../hooks';
 import { Level } from './Level';
+import { Pads } from './Pads';
 
 interface Props {
   engine: AudioEngine;
@@ -179,6 +180,10 @@ export function DeckPanel({ engine, id, onDropTrack, onDropFiles, onSyncFail }: 
           </button>
         </Level>
       </div>
+
+      <Level n={2}>
+        <Pads deck={deck} />
+      </Level>
 
       <Level n={3}>
         <div className="grid-tools" aria-label="Ajustar grid">

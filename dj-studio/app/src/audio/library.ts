@@ -1,7 +1,25 @@
 // Carrega músicas (demo ou arquivos dela) e roda a análise.
 import { computeWaveform, detectTempo } from './analysis';
-import { DEMOS, renderDemo, type DemoSpec } from './demoTracks';
+import { DEMOS, demoSections, renderDemo, type DemoSpec } from './demoTracks';
+import { detectSections, type Section } from '../studio/edit';
 import type { Track } from './engine';
+
+/** Volume percebido aproximado (RMS das partes com som) → ganho para o alvo. */
+export function autoGainFor(data: Float32Array, sampleRate: number): number {
+  const win = Math.round(sampleRate * 0.4);
+  const levels: number[] = [];
+  for (let i = 0; i + win <= data.length; i += win) {
+    let s = 0;
+    for (let j = i; j < i + win; j += 4) s += data[j] * data[j];
+    levels.push(Math.sqrt(s / (win / 4)));
+  }
+  if (!levels.length) return 0;
+  levels.sort((a, b) => a - b);
+  // Partes altas da música (percentil 80) definem o volume — ignora silêncios e intros.
+  const loud = levels[Math.floor(levels.length * 0.8)] || 1e-6;
+  const db = 20 * Math.log10(0.2 / loud);
+  return Math.max(-9, Math.min(9, Math.round(db * 10) / 10));
+}
 
 const nextFrame = () => new Promise((r) => setTimeout(r, 0));
 
@@ -40,6 +58,42 @@ export async function loadDemo(ctx: AudioContext, spec: DemoSpec): Promise<Track
     buffer,
     waveform,
     demo: true,
+    hotCues: new Array(8).fill(null),
+    autoGainDb: autoGainFor(mono, sr),
+    sections: demoSectionsFor(spec).map((x) => ({ ...x, end: Math.min(x.end, buffer.duration) })),
+  };
+}
+
+function demoSectionsFor(spec: DemoSpec): Section[] {
+  const beat = 60 / spec.bpm;
+  const list = demoSections();
+  return list.map((x, i) => ({
+    start: x.startBeat * beat,
+    end: i === list.length - 1 ? Infinity : (x.startBeat + x.bars * 4) * beat,
+    kind: x.name === 'Intro' ? 'intro' : x.name === 'Outro' ? 'outro' : x.name === 'Breakdown' ? 'break' : 'parte',
+    name: x.name,
+  }));
+}
+
+/** Cria uma faixa da biblioteca a partir de áudio gerado (ex.: exportado pelo Estúdio). */
+export function trackFromBuffer(buffer: AudioBuffer, base: Track, title: string, sections: Section[]): Track {
+  const { data, sr } = toMono(buffer, 2);
+  return {
+    id: `edit-${Date.now()}`,
+    title,
+    artist: base.artist,
+    genre: base.genre,
+    bpm: base.bpm,
+    firstBeat: base.firstBeat, // os cortes no grid preservam o ritmo
+    key: base.key,
+    duration: buffer.duration,
+    confidence: base.confidence,
+    buffer,
+    waveform: computeWaveform(data, sr),
+    demo: false,
+    hotCues: new Array(8).fill(null),
+    autoGainDb: autoGainFor(data, sr),
+    sections,
   };
 }
 
@@ -76,6 +130,9 @@ export async function loadFile(ctx: AudioContext, file: File): Promise<Track> {
     buffer,
     waveform,
     demo: false,
+    hotCues: new Array(8).fill(null),
+    autoGainDb: autoGainFor(data, sr),
+    sections: detectSections(waveform, tempo, buffer.duration),
   };
 }
 

@@ -83,6 +83,16 @@ export function Mixer({ engine }: { engine: AudioEngine }) {
             <Knob label="MASTER" value={m.master} min={0} max={1} center={0.85} bipolar={false} onChange={(v) => engine.set('master', v)} format={(v) => `${Math.round(v * 100)}%`} size={36} />
           </Level>
           <Meters engine={engine} />
+          <Level n={3}>
+            <div className="mix-toggles">
+              <button className={`chip ${engine.autoGain ? 'on' : ''}`} onClick={() => engine.setAutoGain(!engine.autoGain)} title="Iguala o volume entre as músicas">
+                AUTO GAIN
+              </button>
+              <button className={`chip ${engine.decks.A.quantize ? 'on' : ''}`} onClick={() => engine.setQuantize(!engine.decks.A.quantize)} title="Cues e loops caem sempre na batida">
+                QUANTIZE
+              </button>
+            </div>
+          </Level>
         </div>
         <Fader engine={engine} id="B" />
         <Channel engine={engine} id="B" />

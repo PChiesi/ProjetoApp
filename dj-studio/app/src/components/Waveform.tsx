@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { Deck } from '../audio/engine';
 import { useFrame } from '../hooks';
+import { CUE_COLORS } from './Pads';
 
 const COLORS = { low: '#4d7cff', mid: '#ffb03b', high: '#f4f1ff' };
 
@@ -87,6 +88,30 @@ export function ScrollingWaveform({ deck, color, zoom }: { deck: Deck; color: st
         g.fillRect(x, isBar ? 0 : h - 10, 1, isBar ? h : 10);
       }
     }
+
+    // Loop ativo
+    if (deck.loop) {
+      const lx = mid + (deck.loop.start - pos) * pps;
+      const rx = mid + (deck.loop.end - pos) * pps;
+      g.fillStyle = 'rgba(82, 227, 164, 0.16)';
+      g.fillRect(lx, 0, rx - lx, h);
+      g.fillStyle = '#52e3a4';
+      g.fillRect(lx, 0, 2, h);
+      g.fillRect(rx - 2, 0, 2, h);
+    }
+
+    // Hot cues
+    t.hotCues.forEach((hc, i) => {
+      if (hc == null) return;
+      const x = mid + (hc - pos) * pps;
+      if (x < -20 || x > w + 20) return;
+      g.fillStyle = CUE_COLORS[i];
+      g.fillRect(x, 0, 2, h);
+      g.fillRect(x, 0, 14, 14);
+      g.fillStyle = '#0d0e14';
+      g.font = '800 10px system-ui, sans-serif';
+      g.fillText(String(i + 1), x + 4, 11);
+    });
 
     // Ponto de CUE
     const cx = mid + (deck.cuePoint - pos) * pps;
@@ -177,6 +202,11 @@ export function OverviewWaveform({ deck, color }: { deck: Deck; color: string })
     g.restore();
     g.fillStyle = color;
     g.fillRect(p * w - 1, 0, 2, h);
+    t.hotCues.forEach((hc, i) => {
+      if (hc == null) return;
+      g.fillStyle = CUE_COLORS[i];
+      g.fillRect((hc / t.duration) * w - 1, 0, 3, h);
+    });
     // Frases
     const beat = 60 / t.bpm;
     g.fillStyle = 'rgba(255,255,255,0.25)';

@@ -10,6 +10,8 @@ interface Props {
   pending: string[];
   onLoad: (deck: DeckId, track: Track) => void;
   onFiles: (files: FileList) => void;
+  onEdit: (track: Track) => void;
+  editing?: string;
 }
 
 type Filter = 'todas' | 'A' | 'B';
@@ -23,7 +25,7 @@ function fits(t: Track, ref: Track | null): boolean {
   return near && key !== 'conflito';
 }
 
-export function Library({ engine, tracks, pending, onLoad, onFiles }: Props) {
+export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, editing }: Props) {
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<Filter>('todas');
   const input = useRef<HTMLInputElement>(null);
@@ -100,7 +102,7 @@ export function Library({ engine, tracks, pending, onLoad, onFiles }: Props) {
           return (
             <div
               key={t.id}
-              className="lib-row"
+              className={`lib-row ${editing === t.id ? 'editing' : ''}`}
               role="row"
               draggable
               onDragStart={(e) => {
@@ -115,6 +117,9 @@ export function Library({ engine, tracks, pending, onLoad, onFiles }: Props) {
                 </button>
                 <button className="btn tiny b" onClick={() => onLoad('B', t)} aria-label={`Carregar ${t.title} no deck B`}>
                   B
+                </button>
+                <button className={`btn tiny edit ${editing === t.id ? 'on' : ''}`} onClick={() => onEdit(t)} aria-label={`Editar ${t.title} no Estúdio`} title="Editar no Estúdio">
+                  ✎
                 </button>
               </span>
               <span>

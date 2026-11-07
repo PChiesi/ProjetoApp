@@ -276,10 +276,12 @@ Acrescentam-se à trilha da seção 5: **"Corte seco no funk"**, **"Subindo a en
 - [x] 4 músicas demo **sintetizadas no próprio app** (livres de direitos): pop 120, rock 124, tamborzão 130 e funk 150, com intro/breakdown/outro em frases de 8 compassos.
 - [x] **Coach v1**: medidor de alinhamento, contador 1-2-3-4 / compasso x/8, semáforo de tom, dicas contextuais com o controle destacado na tela, e **nota com estrelas** a cada transição.
 - [x] Níveis Iniciante / Intermediário / Pro, boas-vindas com o nome dela, atalhos de teclado, gravação do set.
+- [x] **Hot cues** (8 pads coloridos; o salto mantém o ritmo), **loops** de 1/4 a 32 batidas com ½/×2, **quantize** e **auto gain** (níveis Intermediário/Pro).
+- [x] **Estúdio v1**: abrir qualquer música (✎ na biblioteca), selecionar compassos arrastando, recortar/copiar/repetir/apagar, paleta de trechos para colar, Intro +8 / Final +8, fades em compassos, seções coloridas (intro/parte/breakdown/outro), modelos "Versão estendida", "Versão rádio" e "Pro baile", desfazer/refazer, ouvir, **salvar na biblioteca** (já toca nos decks) e **baixar WAV**.
 
 ### Próximos
 1. Testar com ela: abrir o `Pista.html`, deixar ela tocar sem explicar nada, anotar onde travou.
-2. Seguir o backlog da **seção 12**, de cima para baixo: primeiro os itens P0 (key lock, tom, hot cues, loops, controladora), depois o **Estúdio** (P1).
+2. Seguir o backlog da **seção 12**: P0 que faltam (key lock, detecção de tom, biblioteca salva, DDJ-FLX4 e fone) e o **Estúdio v2/v3** (inserir sons/vinheta e efeitos em trechos).
 
 ---
 
@@ -356,10 +358,10 @@ Esforço: P = pequeno (dias), M = médio (1–2 semanas), G = grande (3+ semanas
 |---|---|---|---|---|
 | 1 | **Key lock** (mudar BPM sem virar "voz de esquilo") | Pop com vocal fica estranho a +4% sem isso. | M | ⏳ |
 | 2 | **Detecção de tom** nas músicas dela | Libera as cores de tom e o filtro "Combinam". | M | ⏳ |
-| 3 | **Hot cues** (8 por música, coloridos, salvos) | Marcar o refrão, o drop, a vinheta. | P | ⏳ |
-| 4 | **Loops** (1/4 a 32 batidas, dobrar/dividir, loop roll) | Estender a intro enquanto prepara a próxima. | P | ⏳ |
-| 5 | **Quantize** (cue/loop/play caem na batida) | Iniciante erra o tempo; quantize perdoa. | P | ⏳ |
-| 6 | **Auto gain** (volume igual entre músicas) | Funk e rock costumam ter volumes muito diferentes. | P | ⏳ |
+| 3 | **Hot cues** (8 por música, coloridos) | Marcar o refrão, o drop, a vinheta. | P | ✅ (falta salvar entre sessões → item 7) |
+| 4 | **Loops** (1/4 a 32 batidas, dobrar/dividir, loop roll) | Estender a intro enquanto prepara a próxima. | P | ✅ (loop roll pendente) |
+| 5 | **Quantize** (cue/loop/play caem na batida) | Iniciante erra o tempo; quantize perdoa. | P | ✅ |
+| 6 | **Auto gain** (volume igual entre músicas) | Funk e rock costumam ter volumes muito diferentes. | P | ✅ |
 | 7 | **Biblioteca salva** (músicas, análise e cues ficam entre sessões) | Hoje ela precisa recarregar tudo ao abrir. | M | ⏳ |
 | 8 | **Controladora DDJ-FLX4** + saída de fone pela placa dela | Ela vai comprar; é o que transforma em prática real. | M | ⏳ |
 | 9 | **Pré-escuta (CUE de fone)** por canal | Ouvir a próxima antes do público. | P (com a FLX4) | ⏳ |
@@ -367,7 +369,7 @@ Esforço: P = pequeno (dias), M = médio (1–2 semanas), G = grande (3+ semanas
 ### P1 — Estúdio e criatividade (o pedido dela)
 | # | Funcionalidade | Por que para ela | Esforço | Status |
 |---|---|---|---|---|
-| 10 | **Estúdio v1: editor de faixas** — cortar, estender, apagar, mover, fades, exportar (seção 13) | Fazer a própria versão estendida/rádio/"pro baile". | G | ⏳ |
+| 10 | **Estúdio v1: editor de faixas** — cortar, estender, apagar, mover, fades, exportar (seção 13) | Fazer a própria versão estendida/rádio/"pro baile". | G | ✅ (MP3 pendente; exporta WAV) |
 | 11 | **Estúdio: inserir sons** — vinheta gravada no microfone, efeitos sonoros, sons próprios | Toda DJ de funk tem vinheta. | M | ⏳ |
 | 12 | **Estúdio: efeitos em trechos** — eco, reverb, filtro, freio, reverse, gate, volume | Criar viradas e saídas na própria faixa. | M | ⏳ |
 | 13 | **Efeitos ao vivo** no tempo da música (eco, reverb, flanger, filtro, freio, spinback) | Todos os softwares têm; essenciais nas transições. | M | ⏳ |

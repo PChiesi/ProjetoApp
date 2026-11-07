@@ -3,6 +3,7 @@
 
 import { beatPhase, phaseDelta, syncRate, type Grid } from './beat';
 import type { Waveform } from './analysis';
+import type { Section } from '../studio/edit';
 
 export type DeckId = 'A' | 'B';
 
@@ -19,7 +20,21 @@ export interface Track {
   buffer: AudioBuffer;
   waveform: Waveform;
   demo: boolean;
+  /** 8 hot cues (segundos) — ficam guardados na música. */
+  hotCues: (number | null)[];
+  /** Ajuste para deixar todas as músicas no mesmo volume. */
+  autoGainDb: number;
+  /** Partes da música (intro, breakdown, outro…), em frases de 8 compassos. */
+  sections: Section[];
 }
+
+export interface Loop {
+  start: number;
+  end: number;
+  beats: number;
+}
+
+export const LOOP_SIZES = [0.25, 0.5, 1, 2, 4, 8, 16, 32];
 
 type Listener = () => void;
 
@@ -75,6 +90,9 @@ export class Deck {
   range = 0.08;
   cuePoint = 0;
   synced = false;
+  loop: Loop | null = null;
+  /** Quantize: cues, loops e saltos caem sempre na batida. */
+  quantize = true;
   private offset = 0; // posição (s da música) no último "âncora"
   private anchor = 0; // ctx.currentTime do último âncora
   private rate = 1;
@@ -100,8 +118,110 @@ export class Deck {
 
   position(): number {
     if (!this.playing) return this.offset;
-    const p = this.offset + (this.ctx.currentTime - this.anchor) * this.playbackRate;
+    let p = this.offset + (this.ctx.currentTime - this.anchor) * this.playbackRate;
+    const l = this.loop;
+    if (l && p > l.end) p = l.start + ((p - l.start) % (l.end - l.start));
     return this.track ? Math.min(p, this.track.duration) : p;
+  }
+
+  private beatLen(): number {
+    return 60 / (this.track?.bpm || 120);
+  }
+
+  /** Encaixa um tempo na batida (se o quantize estiver ligado). */
+  snap(t: number, mode: 'round' | 'floor' = 'round'): number {
+    if (!this.track || !this.quantize) return t;
+    const b = this.beatLen();
+    const f = this.track.firstBeat;
+    const n = mode === 'floor' ? Math.floor((t - f) / b + 1e-6) : Math.round((t - f) / b);
+    return Math.max(0, f + n * b);
+  }
+
+  // ---------- hot cues ----------
+
+  /** Pad vazio: marca aqui. Pad marcado: pula para lá (mantendo o ritmo, se tocando). */
+  hotCue(i: number) {
+    const t = this.track;
+    if (!t) return;
+    const cur = t.hotCues[i];
+    if (cur == null) {
+      t.hotCues[i] = this.snap(this.position());
+      this.changed();
+      return;
+    }
+    let target = cur;
+    if (this.playing && this.quantize) {
+      // Leva junto a distância desde a última batida: o salto não "tropeça" e o sync continua.
+      const pos = this.position();
+      target = cur + (pos - this.snap(pos, 'floor'));
+    }
+    this.seek(target);
+  }
+
+  clearHotCue(i: number) {
+    if (!this.track) return;
+    this.track.hotCues[i] = null;
+    this.changed();
+  }
+
+  // ---------- loops ----------
+
+  /** Liga um loop de N batidas a partir da batida atual (mesmo tamanho de novo = desliga). */
+  autoLoop(beats: number) {
+    if (!this.track) return;
+    if (this.loop && Math.abs(this.loop.beats - beats) < 1e-9) {
+      this.exitLoop();
+      return;
+    }
+    const pos = this.position();
+    const start = this.loop ? this.loop.start : this.snap(pos, 'floor');
+    this.setLoop(start, beats, pos);
+  }
+
+  resizeLoop(factor: 0.5 | 2) {
+    if (!this.loop) return;
+    const beats = Math.min(32, Math.max(0.25, this.loop.beats * factor));
+    this.setLoop(this.loop.start, beats, this.position());
+  }
+
+  private setLoop(start: number, beats: number, pos: number) {
+    const end = Math.min(this.track!.duration, start + beats * this.beatLen());
+    this.loop = { start, end, beats };
+    let moved = false;
+    if (pos > end || pos < start) {
+      const len = end - start;
+      pos = start + ((((pos - start) % len) + len) % len);
+      moved = true;
+    }
+    if (this.playing && this.source) {
+      this.offset = pos;
+      this.anchor = this.ctx.currentTime;
+      const curr = this.source;
+      curr.loopStart = start;
+      curr.loopEnd = end;
+      curr.loop = true;
+      // Encolher o loop pode deixar a agulha fora dele: reinicia no ponto certo.
+      if (moved) this.restartAt(pos);
+    } else {
+      this.offset = pos;
+    }
+    this.changed();
+  }
+
+  private restartAt(pos: number) {
+    this.stopSource();
+    this.startSource(pos);
+  }
+
+  exitLoop() {
+    if (!this.loop) return;
+    if (this.playing) {
+      this.offset = this.position();
+      this.anchor = this.ctx.currentTime;
+      if (this.source) this.source.loop = false;
+    }
+    this.loop = null;
+    this.changed();
   }
 
   load(track: Track) {
@@ -111,6 +231,7 @@ export class Deck {
     this.tempo = 0;
     this.rate = 1;
     this.synced = false;
+    this.loop = null;
     this.cuePoint = track.firstBeat;
     this.offset = track.firstBeat;
     this.changed();
@@ -156,6 +277,7 @@ export class Deck {
   seek(t: number) {
     if (!this.track) return;
     t = Math.max(0, Math.min(this.track.duration - 0.01, t));
+    if (this.loop && (t < this.loop.start || t >= this.loop.end)) this.loop = null; // saiu do loop
     if (this.playing) {
       this.stopSource();
       this.startSource(t);
@@ -223,6 +345,11 @@ export class Deck {
     const src = this.ctx.createBufferSource();
     src.buffer = this.track.buffer;
     src.playbackRate.value = this.playbackRate;
+    if (this.loop) {
+      src.loopStart = this.loop.start;
+      src.loopEnd = this.loop.end;
+      src.loop = true;
+    }
     src.connect(this.channel.input);
     src.onended = () => {
       if (this.source === src) {
@@ -278,12 +405,16 @@ export class AudioEngine {
     crossfader: -1,
     master: 0.85,
   };
+  /** Iguala o volume das músicas automaticamente. */
+  autoGain = true;
   private bus: GainNode;
   private limiter: DynamicsCompressorNode;
   private masterGain: GainNode;
   private masterMeter: AnalyserNode;
   private busMeter: AnalyserNode;
   private recDest: MediaStreamAudioDestinationNode;
+  /** Saída do Estúdio (passa pelo limitador e entra na gravação). */
+  readonly studioOut: GainNode;
   private recorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
   recordingSince: number | null = null;
@@ -313,7 +444,13 @@ export class AudioEngine {
     this.masterGain.connect(this.ctx.destination);
     this.masterGain.connect(this.recDest);
 
-    const notify = () => this.emit();
+    this.studioOut = this.ctx.createGain();
+    this.studioOut.connect(this.bus);
+
+    const notify = () => {
+      this.applyAll();
+      this.emit();
+    };
     this.decks = {
       A: new Deck('A', this.ctx, new Channel(this.ctx, this.bus), notify),
       B: new Deck('B', this.ctx, new Channel(this.ctx, this.bus), notify),
@@ -369,7 +506,8 @@ export class AudioEngine {
     for (const id of ['A', 'B'] as DeckId[]) {
       const ch = this.decks?.[id]?.channel;
       if (!ch) continue;
-      s(ch.input.gain, Math.pow(10, this.mix.gain[id] / 20));
+      const auto = this.autoGain ? (this.decks[id].track?.autoGainDb ?? 0) : 0;
+      s(ch.input.gain, Math.pow(10, (this.mix.gain[id] + auto) / 20));
       const eq = (v: number) => (v <= -25.5 ? -45 : v); // no mínimo = "kill"
       s(ch.low.gain, eq(this.mix.low[id]));
       s(ch.mid.gain, eq(this.mix.mid[id]));
@@ -392,6 +530,18 @@ export class AudioEngine {
       s(ch.xfade.gain, this.xfGain(id));
     }
     this.masterGain && s(this.masterGain.gain, this.mix.master);
+  }
+
+  setAutoGain(on: boolean) {
+    this.autoGain = on;
+    this.applyAll();
+    this.emit();
+  }
+
+  setQuantize(on: boolean) {
+    this.decks.A.quantize = on;
+    this.decks.B.quantize = on;
+    this.emit();
   }
 
   // ---- sync ----
