@@ -1,6 +1,6 @@
 # 🎧 Pista — software de DJ para aprender a mixar (plano de desenvolvimento)
 
-> Nome provisório: **Pista**. Público-alvo: alguém que **sonha em ser DJ e está começando do zero**.
+> Nome: **Pista**. Público-alvo: alguém que **sonha em ser DJ e está começando do zero**.
 > O objetivo não é competir com Serato/Rekordbox em recursos, e sim ser **o melhor lugar para aprender**:
 > funcional de verdade (dá para tocar um set), mas que **ensina enquanto ela toca** e cresce junto com ela.
 
@@ -227,16 +227,54 @@ Fundo escuro (cabine), um tom de destaque por deck (ex.: A = ciano, B = magenta)
 
 ---
 
-## 9. Decisões em aberto (para conversar)
-1. **Onde ela vai usar?** Notebook Windows, Mac, tablet? (define prioridade do Tauri e do layout touch)
-2. **Ela tem ou pretende comprar controladora?** Qual? (priorizamos o mapeamento dela)
-3. **Estilo musical preferido?** (define o pack de músicas demo e as lições de exemplo — house, funk, pop, eletrônica…)
-4. **Nome definitivo** do app (e se quer algo personalizado para ela, ex. tela de boas-vindas com o nome dela).
-5. Este projeto deve ficar **neste repositório** (pasta `dj-studio/`) ou em um **repositório próprio**? Recomendo repositório próprio quando começar o código.
+## 9. Decisões tomadas
+
+| Tema | Decisão | Consequência no produto |
+|---|---|---|
+| **Onde vai usar** | Notebook **Windows** | Alvo de tela 1366×768 e maiores; fontes Segoe UI; versão de teste = um único `Pista.html` que abre com duplo clique no Edge/Chrome; instalador com Tauri (WebView2) na fase 6. |
+| **Controladora** | Vai comprar → recomendação: **Pioneer DDJ-FLX4** | Layout padrão Pioneer (o mesmo das cabines/CDJs dos clubes), 2 canais, placa de som embutida com saída de fone separada (resolve a pré-escuta), muito material de estudo em português. Alternativa mais barata: **Hercules DJControl Inpulse 200 MK2** (tem luzes que ensinam a alinhar a batida). O mapeamento MIDI da FLX4 sobe para a **fase 2**. |
+| **Estilos** | **Pop, rock e funk brasileiro** | Músicas demo, lições e algoritmos pensados para esses três (detalhes abaixo). |
+| **Nome** | **Pista** | Tela de boas-vindas pergunta o nome dela e o app a cumprimenta ("bora tocar, …!"). |
+| **Repositório** | Fica neste repositório, pasta `dj-studio/` | Pode virar repositório próprio depois, sem mudar nada no código. |
+
+### 9.1 O que cada estilo pede do software
+
+**Funk brasileiro**
+- Faixas típicas: **~130 BPM** (tamborzão/funk carioca) e **~150 BPM** (mandelão/"150 BPM"), além de funk melody mais lento.
+- A levada do tamborzão é **sincopada** — engana detectores de BPM simples. O detector da Pista usa autocorrelação no compasso inteiro e um modelo "bumbo no 1, caixa no 2 e 4" (testado com tamborzão e 150 sintetizados).
+- 130 → 150 é longe demais para o SYNC (+15%). Em vez de esconder isso, o app **explica** e ensina as técnicas do funk: **corte seco no "1"**, saída com eco e a "puxada".
+- **Vinheta**: todo DJ de funk tem a sua. Fase 3: gravar a própria vinheta pelo microfone (ou importar) num pad do sampler, já no tempo da música.
+- Fase 5: modelo **"Versão funk"** no Remix Studio — acapella de uma música pop sobre um tamborzão, o remix mais brasileiro que existe.
+
+**Rock**
+- Muito rock é gravado com **bateria ao vivo, sem metrônomo**: o BPM oscila. O app mede a "regularidade" e avisa quando o grid pode escorregar; fase 4 traz **grid dinâmico** (BPM que varia ao longo da música).
+- Lição dedicada a **alinhar de ouvido** (◀ ▶), porque o SYNC sozinho não salva uma faixa ao vivo.
+- Transições típicas: entrar no refrão, saída com eco/reverb, filtro.
+
+**Pop**
+- Estrutura clara (verso/refrão) → ótima para aprender **frases** e entrar no "1".
+- Mixagem harmônica faz muita diferença em músicas com vocal → roda de Camelot e cores de tom na biblioteca.
+
+### 9.2 Lições ajustadas aos estilos dela
+Acrescentam-se à trilha da seção 5: **"Corte seco no funk"**, **"Subindo a energia: 130 → 150"**, **"Minha vinheta"**, **"Rock ao vivo: alinhando de ouvido"**, **"Do pop pro funk"** (transição entre gêneros) e **"Versão funk"** (remix com stems).
 
 ---
 
-## 10. Próximos passos imediatos
-1. Responder às decisões em aberto (seção 9).
-2. Protótipo navegável da tela principal (só interface, sem áudio) para validar layout com ela.
-3. Fase 0: estrutura do projeto e AudioEngine com um deck.
+## 10. Status e próximos passos
+
+### Já feito (protótipo funcional em `dj-studio/app`)
+- [x] Fase 0 — projeto React + TypeScript + Vite, testes (Vitest), build em arquivo único para Windows.
+- [x] 2 decks: tocar/pausar, CUE estilo CDJ, SYNC (com dobro/metade e recusa didática acima de 16%), tempo ±8/±16%, empurrar/frear (◀ ▶), pular batidas, correção do grid (÷2, ×2, ½ batida, mover o "1").
+- [x] Mixer: ganho, EQ 3 bandas com corte total, filtro de um botão, volume, crossfader de potência constante, master, medidores e **limitador** (não estoura).
+- [x] Ondas rolando em 3 cores (graves/médios/agudos), grid com compassos e **frases**, visão geral clicável, zoom na roda do mouse.
+- [x] Detecção de BPM e do "1" do compasso para arquivos dela (MP3/WAV/FLAC/OGG/M4A, arrastar e soltar).
+- [x] 4 músicas demo **sintetizadas no próprio app** (livres de direitos): pop 120, rock 124, tamborzão 130 e funk 150, com intro/breakdown/outro em frases de 8 compassos.
+- [x] **Coach v1**: medidor de alinhamento, contador 1-2-3-4 / compasso x/8, semáforo de tom, dicas contextuais com o controle destacado na tela, e **nota com estrelas** a cada transição.
+- [x] Níveis Iniciante / Intermediário / Pro, boas-vindas com o nome dela, atalhos de teclado, gravação do set.
+
+### Próximos
+1. Testar com ela: abrir o `Pista.html`, deixar ela tocar sem explicar nada, anotar onde travou.
+2. Key lock (mudar o BPM sem mudar o tom) e detecção de tom para os arquivos dela.
+3. Trilha de lições guiadas (seção 5.1 + 9.2) com progresso salvo.
+4. Mapeamento da DDJ-FLX4 (Web MIDI) e saída de fone pela placa da controladora.
+5. Hot cues, loops, efeitos e sampler com vinheta.
