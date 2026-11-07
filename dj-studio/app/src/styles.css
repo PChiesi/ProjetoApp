@@ -307,3 +307,6 @@ kbd { background: var(--panel-2); border: 1px solid var(--line); border-bottom-w
 .mic-meter::after { content: ''; position: absolute; inset: 0; width: calc(var(--lvl, 0) * 100%); background: linear-gradient(90deg, var(--good), var(--warn) 75%, var(--bad)); }
 .row-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .err { color: var(--bad) !important; }
+
+.btn.tiny.keylock { color: var(--muted); }
+.btn.tiny.keylock.on { color: #0d0e14; background: var(--warn); border-color: var(--warn); }

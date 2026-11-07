@@ -1,5 +1,6 @@
 // Carrega músicas (demo ou arquivos dela) e roda a análise.
 import { computeWaveform, detectTempo } from './analysis';
+import { detectKey } from './key';
 import { DEMOS, demoSections, renderDemo, type DemoSpec } from './demoTracks';
 import { detectSections, type Section } from '../studio/edit';
 import type { Track } from './engine';
@@ -116,6 +117,8 @@ export async function loadFile(ctx: AudioContext, file: File): Promise<Track> {
   // Analisa no máximo os 4 primeiros minutos (suficiente e rápido).
   const slice = data.subarray(0, Math.min(data.length, sr * 240));
   const tempo = detectTempo(slice, sr);
+  await nextFrame();
+  const key = detectKey(data.subarray(0, Math.min(data.length, sr * 150)), sr);
   const name = file.name.replace(/\.[^.]+$/, '');
   const [artist, title] = name.includes(' - ') ? name.split(' - ', 2) : ['', name];
   return {
@@ -124,7 +127,7 @@ export async function loadFile(ctx: AudioContext, file: File): Promise<Track> {
     artist: artist.trim() || 'Minha música',
     bpm: tempo.bpm,
     firstBeat: tempo.firstBeat,
-    key: null,
+    key: key?.camelot ?? null,
     duration: buffer.duration,
     confidence: tempo.confidence,
     buffer,

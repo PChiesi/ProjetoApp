@@ -4,6 +4,7 @@
 import { beatPhase, phaseDelta, syncRate, type Grid } from './beat';
 import type { Waveform } from './analysis';
 import type { Section } from '../studio/edit';
+import { createShifter, loadKeyLock } from './keylock';
 
 export type DeckId = 'A' | 'B';
 
@@ -93,6 +94,10 @@ export class Deck {
   loop: Loop | null = null;
   /** Quantize: cues, loops e saltos caem sempre na batida. */
   quantize = true;
+  /** Key lock: o tom não muda quando o BPM muda. */
+  keyLock = true;
+  /** Pitch shifter do key lock (fica entre a música e o canal). */
+  shifter: AudioWorkletNode | null = null;
   private offset = 0; // posição (s da música) no último "âncora"
   private anchor = 0; // ctx.currentTime do último âncora
   private rate = 1;
@@ -308,6 +313,7 @@ export class Deck {
     this.rate = rate;
     this.tempo = Math.max(-1, Math.min(1, (rate - 1) / this.range));
     if (this.source) this.source.playbackRate.setTargetAtTime(this.playbackRate, this.ctx.currentTime, 0.01);
+    this.updatePitch();
     this.changed();
   }
 
@@ -319,6 +325,30 @@ export class Deck {
     }
     this.nudgeFactor = 1 + dir * 0.04;
     if (this.source) this.source.playbackRate.setTargetAtTime(this.playbackRate, this.ctx.currentTime, 0.005);
+    this.updatePitch();
+  }
+
+  setKeyLock(on: boolean) {
+    this.keyLock = on;
+    this.updatePitch();
+    this.changed();
+  }
+
+  /** Liga o pitch shifter (chamado pelo motor quando o AudioWorklet carrega). */
+  attachShifter(node: AudioWorkletNode) {
+    this.shifter = node;
+    node.connect(this.channel.input);
+    if (this.source) {
+      this.source.disconnect();
+      this.source.connect(node);
+    }
+    this.updatePitch();
+  }
+
+  private updatePitch() {
+    if (!this.shifter) return;
+    const p = this.keyLock ? 1 / this.playbackRate : 1;
+    this.shifter.parameters.get('pitch')!.setValueAtTime(Math.max(0.5, Math.min(2, p)), this.ctx.currentTime);
   }
 
   /** Move a música em batidas (para corrigir o grid ou pular). */
@@ -350,7 +380,7 @@ export class Deck {
       src.loopEnd = this.loop.end;
       src.loop = true;
     }
-    src.connect(this.channel.input);
+    src.connect(this.shifter ?? this.channel.input);
     src.onended = () => {
       if (this.source === src) {
         this.offset = this.track?.duration ?? 0;
@@ -456,7 +486,15 @@ export class AudioEngine {
       B: new Deck('B', this.ctx, new Channel(this.ctx, this.bus), notify),
     };
     this.applyAll();
+    loadKeyLock(this.ctx).then((ok) => {
+      if (!ok) return;
+      this.decks.A.attachShifter(createShifter(this.ctx));
+      this.decks.B.attachShifter(createShifter(this.ctx));
+      this.keyLockReady = true;
+      this.emit();
+    });
   }
+  keyLockReady = false;
 
   // ---- assinatura de mudanças (para a interface) ----
   subscribe = (l: Listener) => {

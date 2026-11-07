@@ -174,6 +174,16 @@ export function DeckPanel({ engine, id, onDropTrack, onDropFiles, onSyncFail }: 
             aria-label={`Tempo do deck ${id}`}
           />
         </label>
+        {engine.keyLockReady && (
+          <button
+            className={`btn tiny keylock ${deck.keyLock ? 'on' : ''}`}
+            onClick={() => deck.setKeyLock(!deck.keyLock)}
+            title="KEY LOCK: muda o BPM sem mudar o tom da música (sem 'voz de esquilo')"
+            aria-pressed={deck.keyLock}
+          >
+            🔒 KEY
+          </button>
+        )}
         <Level n={2}>
           <button className="btn tiny" onClick={() => deck.setRange(deck.range === 0.08 ? 0.16 : 0.08)} title="Alcance do tempo">
             ±{Math.round(deck.range * 100)}%

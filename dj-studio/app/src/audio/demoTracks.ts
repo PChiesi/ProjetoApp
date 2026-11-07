@@ -17,7 +17,7 @@ export interface DemoSpec {
 
 export const DEMOS: DemoSpec[] = [
   { id: 'demo-pop', title: 'Verão em Neon', artist: 'Pista Demo', genre: 'Pop', bpm: 120, key: '8A', chords: [57, 53, 48, 55], minor: true, style: 'pop' },
-  { id: 'demo-rock', title: 'Garagem 77', artist: 'Pista Demo', genre: 'Rock', bpm: 124, key: '9A', chords: [52, 48, 55, 50], minor: true, style: 'rock' },
+  { id: 'demo-rock', title: 'Garagem 77', artist: 'Pista Demo', genre: 'Rock', bpm: 124, key: '9A', chords: [52, 48, 50, 47], minor: true, style: 'rock' },
   { id: 'demo-funk', title: 'Tamborzão da Vila', artist: 'Pista Demo', genre: 'Funk', bpm: 130, key: '7A', chords: [50, 50, 46, 45], minor: true, style: 'tamborzao' },
   { id: 'demo-mandelao', title: 'Baile 150', artist: 'Pista Demo', genre: 'Funk', bpm: 150, key: '8A', chords: [45, 45, 41, 43], minor: true, style: 'mandelao' },
 ];
@@ -149,7 +149,9 @@ export function renderDemo(spec: DemoSpec, sampleRate = 44100): Float32Array {
     });
   };
   const chord = (t0: number, dur: number, root: number) => {
-    const third = spec.minor ? 3 : 4;
+    // Acorde diatônico na escala menor natural da música (ex.: Am F C G).
+    const rel = (((root - spec.chords[0]) % 12) + 12) % 12;
+    const third = [0, 5, 7].includes(rel) ? 3 : 4;
     const notes = rock ? [root, root + 7, root + 12] : [root + 12, root + 12 + third, root + 19];
     const fs = notes.map(mtof);
     const phs = notes.map(() => 0);
