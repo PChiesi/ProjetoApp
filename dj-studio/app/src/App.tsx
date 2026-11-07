@@ -4,6 +4,7 @@ import { beatInfo } from './audio/beat';
 import { ensureBuffer, loadAllDemos, loadFile } from './audio/library';
 import { del, getAll, put, recordToTrack, saveTrackState, trackToRecord, type SoundRecord, type StateRecord, type TrackRecord } from './storage/db';
 import { encodeWav } from './studio/render';
+import { saveFile } from './platform';
 import { flx4Leds, flx4Map, keyOf, MidiDecoder, MidiHub, ACTIONS, type Binding } from './midi/midi';
 import { Settings } from './midi/Settings';
 import { coachTip, TransitionJudge, type Snapshot, type Tip, type TransitionResult } from './coach/coach';
@@ -372,14 +373,10 @@ export default function App() {
     if (engine.recording) {
       const blob = await engine.stopRecording();
       if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
       const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
-      a.href = url;
-      a.download = `pista-set-${stamp}.webm`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-      toast('Set salvo na pasta Downloads! Escute depois para ver o que melhorar. 🎧');
+      const where = await saveFile(blob, `pista-set-${stamp}.webm`, { label: 'Gravação do set', ext: 'webm' }).catch(() => null);
+      if (where) toast(`Set salvo${where === 'Downloads' ? ' na pasta Downloads' : ''}! Escute depois para ver o que melhorar. 🎧`);
+      else toast('Gravação descartada.');
     } else {
       await engine.resume();
       engine.startRecording();

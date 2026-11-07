@@ -29,6 +29,7 @@ import {
   type Section,
   type SectionKind,
 } from './edit';
+import { saveFile } from '../platform';
 import { encodeWav, renderProject, StudioPlayer, type RenderOpts } from './render';
 import { trimAndNormalize, type SoundAsset, type SoundBank } from './sounds';
 import { VinhetaRecorder } from './VinhetaRecorder';
@@ -218,13 +219,8 @@ export function Studio({ engine, track, onExit, onSaved, toast, bank, onUserSoun
       const buf = await renderProject(track.buffer!, project, opts);
       const title = `${track.title.replace(/ \(Edit.*\)$/, '')} (Edit)`;
       if (mode === 'download') {
-        const url = URL.createObjectURL(encodeWav(buf));
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${title}.wav`;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 10000);
-        toast('WAV salvo na pasta Downloads.');
+        const where = await saveFile(encodeWav(buf), `${title}.wav`, { label: 'Áudio WAV', ext: 'wav' });
+        if (where) toast(where === 'Downloads' ? 'WAV salvo na pasta Downloads.' : 'WAV salvo!');
       } else {
         onSaved(trackFromBuffer(buf, track, title, mapSections(track.sections, project)));
         toast(`"${title}" está na biblioteca — já dá para tocar nos decks!`);
@@ -530,7 +526,7 @@ export function Studio({ engine, track, onExit, onSaved, toast, bank, onUserSoun
           ↷
         </button>
         <button className="btn" onClick={() => save('download')} disabled={busy}>
-          ⬇ Baixar WAV
+          ⬇ Exportar WAV
         </button>
         <button className="btn primary small-primary" onClick={() => save('library')} disabled={busy}>
           {busy ? 'Gerando…' : '✔ Salvar na biblioteca'}

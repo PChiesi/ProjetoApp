@@ -1,0 +1,50 @@
+name: Pista — executável Windows
+
+on:
+  push:
+    paths: ["dj-studio/**", ".github/workflows/pista-windows.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: dj-studio/app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: dj-studio/app/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: dj-studio/app/src-tauri -> target
+
+      - name: Dependências
+        run: npm ci
+
+      - name: Testes
+        run: npm test
+
+      - name: Gerar instalador e executável
+        run: npx tauri build
+
+      - name: Instalador (setup .exe e .msi)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pista-instalador-Windows
+          path: |
+            dj-studio/app/src-tauri/target/release/bundle/nsis/*.exe
+            dj-studio/app/src-tauri/target/release/bundle/msi/*.msi
+
+      - name: Executável sem instalar (Pista.exe)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pista-exe-Windows
+          path: dj-studio/app/src-tauri/target/release/Pista.exe
