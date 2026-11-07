@@ -10,8 +10,10 @@ import { OverviewWaveform, ScrollingWaveform } from './components/Waveform';
 import { LEVEL_NAMES, LevelContext, type SkillLevel } from './components/Level';
 import { fmtTime, storageGet, storageSet, useEngine, useFrame } from './hooks';
 import { Studio } from './studio/Studio';
+import { SoundBank } from './studio/sounds';
 
 const engine = new AudioEngine();
+const bank = new SoundBank(engine.ctx);
 
 interface Toast {
   id: number;
@@ -303,6 +305,9 @@ export default function App() {
             onExit={() => setView('decks')}
             onSaved={(t) => setTracks((ts) => [...ts, t])}
             toast={toast}
+            bank={bank}
+            onUserSound={(snd) => bank.add(snd)}
+            onRemoveUserSound={(id) => bank.remove(id)}
           />
         ) : (
         <>

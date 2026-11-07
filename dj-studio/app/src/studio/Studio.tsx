@@ -17,12 +17,22 @@ import {
   snapTime,
   TEMPLATES,
   toSource,
+  addEffect,
+  addSound,
+  buildUp,
+  echoOut,
+  removeItem,
+  FX_INFO,
+  type FxType,
   type EditProject,
   type Grid,
   type Section,
   type SectionKind,
 } from './edit';
-import { encodeWav, renderProject, StudioPlayer } from './render';
+import { encodeWav, renderProject, StudioPlayer, type RenderOpts } from './render';
+import { trimAndNormalize, type SoundAsset, type SoundBank } from './sounds';
+import { VinhetaRecorder } from './VinhetaRecorder';
+import { AUDIO_ACCEPT } from '../audio/library';
 
 interface Props {
   engine: AudioEngine;
@@ -30,6 +40,9 @@ interface Props {
   onExit: () => void;
   onSaved: (t: Track) => void;
   toast: (text: string) => void;
+  bank: SoundBank;
+  onUserSound: (s: SoundAsset) => void;
+  onRemoveUserSound: (id: string) => void;
 }
 
 const SECTION_COLORS: Record<SectionKind, string> = {
@@ -43,7 +56,7 @@ const FADE_BARS = [0, 1, 2, 4, 8];
 
 type Sel = { t0: number; t1: number } | null;
 
-export function Studio({ engine, track, onExit, onSaved, toast }: Props) {
+export function Studio({ engine, track, onExit, onSaved, toast, bank, onUserSound, onRemoveUserSound }: Props) {
   const grid: Grid = { bpm: track.bpm, firstBeat: track.firstBeat };
   const bar = barLen(grid);
   const [project, setProject] = useState<EditProject>(() => newProject(track.id, track.duration));
@@ -60,6 +73,14 @@ export function Studio({ engine, track, onExit, onSaved, toast }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const drag = useRef<{ x: number; t: number; moved: boolean } | null>(null);
   const clipCount = useRef(0);
+  const [selItem, setSelItem] = useState<number | null>(null);
+  const [recOpen, setRecOpen] = useState(false);
+  const [, setBankVer] = useState(0);
+  useEffect(() => bank.subscribe(() => setBankVer((v) => v + 1)), [bank]);
+  const importInput = useRef<HTMLInputElement>(null);
+  const itemDrag = useRef<{ id: number; x: number; at: number; moved: boolean } | null>(null);
+  const [dragAt, setDragAt] = useState<{ id: number; at: number } | null>(null);
+  const opts: RenderOpts = { grid, sound: (id) => bank.get(id)?.buffer };
 
   const total = projectLength(project);
 
@@ -91,7 +112,7 @@ export function Studio({ engine, track, onExit, onSaved, toast }: Props) {
         decks.forEach((d) => d.pause());
         toast('Pausei os decks para você ouvir o Estúdio.');
       }
-      player.play(track.buffer, p, Math.min(from, projectLength(p) - 0.05), () => setPlaying(false));
+      player.play(track.buffer, p, Math.min(from, projectLength(p) - 0.05), opts, () => setPlaying(false));
       setPlaying(true);
     },
     [engine, player, project, toast, track.buffer],
@@ -157,6 +178,31 @@ export function Studio({ engine, track, onExit, onSaved, toast }: Props) {
       commit(deleteRange(project, sel.t0, sel.t1));
       setCursor(sel.t0);
     },
+    sound: (id: string) => {
+      const at = snapTime(sel ? sel.t0 : cursor, grid, 'beat', total);
+      const next = addSound(project, id, at);
+      commit(next, true);
+      setSelItem(next.sounds[next.sounds.length - 1].id);
+    },
+    fx: (type: FxType) => {
+      if (!sel) return;
+      commit(addEffect(project, type, sel.t0, sel.t1), true);
+    },
+    echoOut: () => commit(echoOut(project, grid, sel ? sel.t1 : cursor || total), true),
+    buildUp: () => {
+      const drop = sel ? sel.t1 : cursor;
+      if (drop < bar) return toast('Ponha o cursor no ponto do drop (onde a música "explode").');
+      let next = buildUp(project, grid, drop);
+      const riser = bank.get('riser');
+      if (riser) next = addSound(next, 'riser', Math.max(0, drop - riser.buffer.duration), 0.8);
+      commit(next, true);
+    },
+    removeSelected: () => {
+      if (selItem == null) return false;
+      commit(removeItem(project, selItem), true);
+      setSelItem(null);
+      return true;
+    },
     paste: (clipId: number) => {
       const c = project.palette.find((x) => x.id === clipId);
       if (!c) return;
@@ -169,7 +215,7 @@ export function Studio({ engine, track, onExit, onSaved, toast }: Props) {
     stop();
     setBusy(true);
     try {
-      const buf = await renderProject(track.buffer, project);
+      const buf = await renderProject(track.buffer, project, opts);
       const title = `${track.title.replace(/ \(Edit.*\)$/, '')} (Edit)`;
       if (mode === 'download') {
         const url = URL.createObjectURL(encodeWav(buf));
@@ -203,8 +249,12 @@ export function Studio({ engine, track, onExit, onSaved, toast }: Props) {
       else if (ctrl && k === 'x') actions.cut();
       else if (ctrl && k === 'c') actions.copy();
       else if (ctrl && k === 'd') actions.duplicate();
-      else if (k === 'delete' || k === 'backspace') actions.remove();
-      else if (k === 'escape') setSel(null);
+      else if (k === 'delete' || k === 'backspace') {
+        if (!actions.removeSelected()) actions.remove();
+      } else if (k === 'escape') {
+        setSel(null);
+        setSelItem(null);
+      }
       else if (k === 'home') setCursor(0);
       else done = false;
       if (done) e.preventDefault();
@@ -239,9 +289,12 @@ export function Studio({ engine, track, onExit, onSaved, toast }: Props) {
     const t2x = (t: number) => (t - v.start) * v.pps;
     const RULER = 22;
     const SECT = 22;
+    const LANE = 26;
     const top = RULER + SECT;
-    const wh = h - top;
+    const wh = h - top - 2 * LANE;
     const cy = top + wh / 2;
+    const soundY = top + wh;
+    const fxY = soundY + LANE;
 
     // Auto-rolagem durante a reprodução
     const ph = player.position();
@@ -255,6 +308,11 @@ export function Studio({ engine, track, onExit, onSaved, toast }: Props) {
       g.fillStyle = i % 2 ? '#12131b' : '#0f1017';
       g.fillRect(x0, top, x1 - x0, wh);
     });
+    g.fillStyle = '#0b0c12';
+    g.fillRect(0, soundY, w, 2 * LANE);
+    g.fillStyle = 'rgba(255,255,255,0.06)';
+    g.fillRect(0, soundY, w, 1);
+    g.fillRect(0, fxY, w, 1);
 
     // Onda + faixa de seções
     const wf = track.waveform;
@@ -348,6 +406,50 @@ export function Studio({ engine, track, onExit, onSaved, toast }: Props) {
     if (project.fadeIn > 0) fade(0, project.fadeIn, true);
     if (project.fadeOut > 0) fade(total - project.fadeOut, total, false);
 
+    // Efeitos (faixa de baixo)
+    g.font = '700 11px system-ui, sans-serif';
+    for (const f of project.effects) {
+      const x0 = t2x(f.t0);
+      const x1 = t2x(f.t1);
+      if (x1 < 0 || x0 > w) continue;
+      const info = FX_INFO[f.type];
+      g.fillStyle = info.color;
+      g.globalAlpha = f.id === selItem ? 1 : 0.75;
+      g.fillRect(x0, fxY + 4, Math.max(3, x1 - x0), LANE - 8);
+      g.globalAlpha = 0.18;
+      g.fillRect(x0, top, Math.max(3, x1 - x0), wh);
+      g.globalAlpha = 1;
+      g.fillStyle = '#0d0e14';
+      if (x1 - x0 > 30) g.fillText(`${info.icon} ${info.name}`, x0 + 4, fxY + 17);
+      if (f.id === selItem) {
+        g.strokeStyle = '#fff';
+        g.lineWidth = 2;
+        g.strokeRect(x0, fxY + 3, x1 - x0, LANE - 6);
+      }
+    }
+    // Sons
+    for (const e of project.sounds) {
+      const snd = bank.get(e.soundId);
+      const atT = dragAt?.id === e.id ? dragAt.at : e.at;
+      const x0 = t2x(atT);
+      const x1 = x0 + Math.max(26, (snd?.buffer.duration ?? 1) * v.pps);
+      if (x1 < 0 || x0 > w) continue;
+      g.fillStyle = e.id === selItem ? '#ffffff' : '#ff8a00';
+      g.globalAlpha = e.id === selItem ? 0.95 : 0.8;
+      g.beginPath();
+      g.roundRect(x0, soundY + 3, x1 - x0, LANE - 6, 6);
+      g.fill();
+      g.globalAlpha = 1;
+      g.fillStyle = '#0d0e14';
+      g.fillText(`${snd?.icon ?? '♪'} ${snd?.name ?? 'som'}`, x0 + 5, soundY + 17);
+      g.fillStyle = '#ff8a00';
+      g.fillRect(x0, top, 1, wh);
+    }
+    g.fillStyle = 'rgba(255,255,255,0.35)';
+    g.font = '800 9px system-ui, sans-serif';
+    if (!project.sounds.length) g.fillText('SONS', 6, soundY + 16);
+    if (!project.effects.length) g.fillText('EFEITOS', 6, fxY + 16);
+
     // Seleção
     if (sel) {
       const x0 = t2x(sel.t0);
@@ -372,6 +474,38 @@ export function Studio({ engine, track, onExit, onSaved, toast }: Props) {
     const v = view();
     return snapTime(v.start + (clientX - r.left) / v.pps, grid, unit, total);
   };
+
+  /** Clicou num som ou num efeito? */
+  const hitItem = (clientX: number, clientY: number): { id: number; kind: 'sound' | 'fx'; at: number } | null => {
+    const r = canvas.current!.getBoundingClientRect();
+    const vv = view();
+    const x = clientX - r.left;
+    const y = clientY - r.top;
+    const LANE = 26;
+    const t = vv.start + x / vv.pps;
+    if (y >= r.height - 2 * LANE && y < r.height - LANE) {
+      for (const e of [...project.sounds].reverse()) {
+        const dur = Math.max(26 / vv.pps, bank.get(e.soundId)?.buffer.duration ?? 1);
+        if (t >= e.at && t <= e.at + dur) return { id: e.id, kind: 'sound', at: e.at };
+      }
+    } else if (y >= r.height - LANE) {
+      for (const f of project.effects) if (t >= f.t0 && t <= f.t1) return { id: f.id, kind: 'fx', at: f.t0 };
+    }
+    return null;
+  };
+
+  const importSound = async (file: File) => {
+    try {
+      const raw = await engine.ctx.decodeAudioData(await file.arrayBuffer());
+      const s: SoundAsset = { id: `user-${Date.now()}`, name: file.name.replace(/\.[^.]+$/, '').slice(0, 24), icon: '🎵', buffer: trimAndNormalize(engine.ctx, raw, 0.003), user: true };
+      onUserSound(s);
+      toast(`Som "${s.name}" adicionado.`);
+    } catch {
+      toast('Não consegui abrir esse arquivo de som.');
+    }
+  };
+
+  const selected = project.sounds.find((x) => x.id === selItem) ?? project.effects.find((x) => x.id === selItem);
 
   const v = view();
   const selBars = sel ? barsOf(sel.t1 - sel.t0) : 0;
@@ -455,9 +589,22 @@ export function Studio({ engine, track, onExit, onSaved, toast }: Props) {
           aria-label="Linha do tempo: arraste para selecionar compassos"
           onPointerDown={(e) => {
             (e.target as Element).setPointerCapture(e.pointerId);
+            const hit = hitItem(e.clientX, e.clientY);
+            if (hit) {
+              setSelItem(hit.id);
+              if (hit.kind === 'sound') itemDrag.current = { id: hit.id, x: e.clientX, at: hit.at, moved: false };
+              return;
+            }
+            setSelItem(null);
             drag.current = { x: e.clientX, t: tAt(e.clientX), moved: false };
           }}
           onPointerMove={(e) => {
+            const it = itemDrag.current;
+            if (it) {
+              if (Math.abs(e.clientX - it.x) > 3) it.moved = true;
+              if (it.moved) setDragAt({ id: it.id, at: snapTime(it.at + (e.clientX - it.x) / v.pps, grid, 'beat', total) });
+              return;
+            }
             const d = drag.current;
             if (!d) return;
             if (Math.abs(e.clientX - d.x) > 4) d.moved = true;
@@ -467,6 +614,13 @@ export function Studio({ engine, track, onExit, onSaved, toast }: Props) {
             }
           }}
           onPointerUp={() => {
+            const it = itemDrag.current;
+            itemDrag.current = null;
+            if (it) {
+              if (it.moved && dragAt) commit({ ...project, sounds: project.sounds.map((x) => (x.id === it.id ? { ...x, at: dragAt.at } : x)) }, true);
+              setDragAt(null);
+              return;
+            }
             const d = drag.current;
             drag.current = null;
             if (d && !d.moved) {
@@ -496,10 +650,55 @@ export function Studio({ engine, track, onExit, onSaved, toast }: Props) {
 
       <div className="studio-bottom">
         <p className="studio-hint">
-          {sel
+          {selected
+            ? 'soundId' in selected
+              ? `${bank.get(selected.soundId)?.name ?? 'Som'} selecionado — arraste para mover, Delete para remover.`
+              : `Efeito ${FX_INFO[selected.type].name} selecionado — Delete para remover.`
+            : sel
             ? `Seleção: ${selBars} compasso${selBars === 1 ? '' : 's'} (${(sel.t1 - sel.t0).toFixed(1)} s). Recorte, copie, repita ou apague — o ritmo continua certinho.`
             : 'Arraste na onda para selecionar compassos. Clique para pôr o cursor. Espaço toca daqui.'}
         </p>
+        <div className="studio-row">
+          <span className="tool-label">Sons</span>
+          <button className="btn rec-btn" onClick={() => setRecOpen(true)}>
+            🎤 Gravar vinheta
+          </button>
+          {bank.all().map((sd) => (
+            <span key={sd.id} className={`sound-chip ${sd.user ? 'user' : ''}`}>
+              <button onClick={() => actions.sound(sd.id)} title="Inserir no cursor">
+                {sd.icon} {sd.name}
+              </button>
+              {sd.user && (
+                <button className="x" aria-label={`Apagar ${sd.name}`} onClick={() => onRemoveUserSound(sd.id)}>
+                  ✕
+                </button>
+              )}
+            </span>
+          ))}
+          <button className="btn ghost" onClick={() => importInput.current?.click()}>
+            + Importar som
+          </button>
+          <input ref={importInput} type="file" accept={AUDIO_ACCEPT} hidden onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) importSound(f);
+            e.target.value = '';
+          }} />
+        </div>
+        <div className="studio-row">
+          <span className="tool-label">Efeitos</span>
+          {(Object.keys(FX_INFO) as FxType[]).map((k) => (
+            <button key={k} className="fx-btn" style={{ ['--fx' as string]: FX_INFO[k].color }} disabled={!sel} onClick={() => actions.fx(k)} title={`${FX_INFO[k].desc} (selecione um trecho antes)`}>
+              {FX_INFO[k].icon} {FX_INFO[k].name}
+            </button>
+          ))}
+          <span className="sep-v" />
+          <button className="btn" onClick={actions.echoOut} title="Eco no último compasso e silêncio depois (no fim da seleção ou no cursor)">
+            ◎ Saída com eco
+          </button>
+          <button className="btn" onClick={actions.buildUp} title="4 compassos de subida + riser terminando no cursor (o drop)">
+            △ Subida pro drop
+          </button>
+        </div>
         <div className="studio-row">
           <span className="tool-label">Modelos</span>
           {TEMPLATES.map((tp) => (
@@ -527,9 +726,11 @@ export function Studio({ engine, track, onExit, onSaved, toast }: Props) {
             </span>
           ))}
           <span>✂ emenda</span>
+          <span><i style={{ background: '#ff8a00' }} /> som</span>
           <span className="muted">Atalhos: Espaço · Ctrl+X/C/D · Delete · Ctrl+Z/Y</span>
         </div>
       </div>
+      {recOpen && <VinhetaRecorder ctx={engine.ctx} out={engine.studioOut} onSave={(snd) => { onUserSound(snd); toast(`Vinheta "${snd.name}" salva! Ela aparece em Sons.`); }} onClose={() => setRecOpen(false)} />}
     </section>
   );
 }

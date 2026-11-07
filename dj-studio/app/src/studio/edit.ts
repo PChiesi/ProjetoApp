@@ -15,6 +15,35 @@ export interface Clip {
   blocks: Block[];
 }
 
+/** Um som (vinheta, buzina…) colocado num ponto da linha do tempo. */
+export interface SoundEvent {
+  id: number;
+  soundId: string;
+  at: number;
+  gain: number; // 0..1.5
+}
+
+export type FxType = 'eco' | 'reverb' | 'abafar' | 'subida' | 'gate' | 'freio' | 'reverse' | 'corte';
+
+/** Um efeito "pintado" sobre um trecho da linha do tempo. */
+export interface FxRegion {
+  id: number;
+  type: FxType;
+  t0: number;
+  t1: number;
+}
+
+export const FX_INFO: Record<FxType, { name: string; icon: string; color: string; desc: string }> = {
+  eco: { name: 'Eco', icon: '◎', color: '#22d3ee', desc: 'Repete o som no tempo da música; o eco continua depois do trecho.' },
+  reverb: { name: 'Reverb', icon: '≋', color: '#818cf8', desc: 'Som de "salão grande".' },
+  abafar: { name: 'Abafar', icon: '▽', color: '#60a5fa', desc: 'Filtro que vai tirando os agudos, como música vindo de outra sala.' },
+  subida: { name: 'Subida', icon: '△', color: '#fbbf24', desc: 'Tira os graves aos poucos e cria tensão antes do drop.' },
+  gate: { name: 'Picotar', icon: '▤', color: '#f472b6', desc: 'Liga e desliga o som em 1/8 de batida (efeito "gaguejando").' },
+  freio: { name: 'Freio', icon: '⏬', color: '#fb923c', desc: 'Como um vinil parando.' },
+  reverse: { name: 'Ao contrário', icon: '⟲', color: '#a3e635', desc: 'Toca o trecho de trás para frente.' },
+  corte: { name: 'Corte', icon: '✕', color: '#f87171', desc: 'Silêncio total — o "corte seco" do funk antes de voltar no 1.' },
+};
+
 export interface EditProject {
   trackId: string;
   blocks: Block[];
@@ -22,6 +51,8 @@ export interface EditProject {
   fadeIn: number;
   fadeOut: number;
   palette: Clip[];
+  sounds: SoundEvent[];
+  effects: FxRegion[];
 }
 
 export interface Grid {
@@ -38,10 +69,10 @@ export interface Section {
 }
 
 let nextId = 1;
-const newId = () => nextId++;
+export const newId = () => nextId++;
 
 export function newProject(trackId: string, duration: number): EditProject {
-  return { trackId, blocks: [{ id: newId(), start: 0, end: duration }], fadeIn: 0, fadeOut: 0, palette: [] };
+  return { trackId, blocks: [{ id: newId(), start: 0, end: duration }], fadeIn: 0, fadeOut: 0, palette: [], sounds: [], effects: [] };
 }
 
 export const blockLen = (b: Block) => b.end - b.start;
@@ -113,7 +144,16 @@ export function deleteRange(p: EditProject, t0: number, t1: number): EditProject
   const { blocks, i0, i1 } = isolate(p.blocks, t0, t1);
   const rest = [...blocks.slice(0, i0), ...blocks.slice(i1)];
   if (!rest.length) return p; // não deixa a música vazia
-  return { ...p, blocks: rest };
+  const len = t1 - t0;
+  // Sons e efeitos acompanham a música: os do trecho apagado somem, os de depois andam para trás.
+  const sounds = (p.sounds ?? []).filter((e) => e.at < t0 - EPS || e.at >= t1 - EPS).map((e) => (e.at >= t1 - EPS ? { ...e, at: e.at - len } : e));
+  const effects = (p.effects ?? [])
+    .map((f) => {
+      const shift = (t: number) => (t <= t0 ? t : t >= t1 ? t - len : t0);
+      return { ...f, t0: shift(f.t0), t1: shift(f.t1) };
+    })
+    .filter((f) => f.t1 - f.t0 > EPS);
+  return { ...p, blocks: rest, sounds, effects };
 }
 
 export function insertAt(p: EditProject, t: number, ins: Block[]): EditProject {
@@ -125,7 +165,10 @@ export function insertAt(p: EditProject, t: number, ins: Block[]): EditProject {
     break;
   }
   const copies = ins.map((b) => ({ ...b, id: newId() }));
-  return { ...p, blocks: [...bs.slice(0, i), ...copies, ...bs.slice(i)] };
+  const len = ins.reduce((a, b) => a + blockLen(b), 0);
+  const sounds = (p.sounds ?? []).map((e) => (e.at >= t - EPS ? { ...e, at: e.at + len } : e));
+  const effects = (p.effects ?? []).map((f) => ({ ...f, t0: f.t0 >= t - EPS ? f.t0 + len : f.t0, t1: f.t1 > t + EPS ? f.t1 + len : f.t1 }));
+  return { ...p, blocks: [...bs.slice(0, i), ...copies, ...bs.slice(i)], sounds, effects };
 }
 
 export function duplicateRange(p: EditProject, t0: number, t1: number): EditProject {
@@ -239,4 +282,36 @@ export function applyTemplate(id: TemplateId, trackId: string, duration: number,
     }
   }
   return p;
+}
+
+// ---------- sons e efeitos ----------
+
+export function addSound(p: EditProject, soundId: string, at: number, gain = 1): EditProject {
+  return { ...p, sounds: [...p.sounds, { id: newId(), soundId, at, gain }] };
+}
+
+export function addEffect(p: EditProject, type: FxType, t0: number, t1: number): EditProject {
+  if (t1 - t0 < EPS) return p;
+  // O mesmo efeito por cima de outro igual: substitui a parte sobreposta.
+  const others = p.effects.filter((f) => f.type !== type || f.t1 <= t0 || f.t0 >= t1);
+  return { ...p, effects: [...others, { id: newId(), type, t0, t1 }].sort((a, b) => a.t0 - b.t0) };
+}
+
+export function removeItem(p: EditProject, id: number): EditProject {
+  return { ...p, sounds: p.sounds.filter((s) => s.id !== id), effects: p.effects.filter((f) => f.id !== id) };
+}
+
+/** "Saída com eco": eco no último compasso e corte depois — o eco "voa" sozinho no final. */
+export function echoOut(p: EditProject, g: Grid, at: number): EditProject {
+  const b = barLen(g);
+  return addEffect(addEffect(p, 'eco', Math.max(0, at - b), at), 'corte', at, Math.min(projectLength(p), at + 2 * b));
+}
+
+/** "Subida pro drop": 4 compassos de subida terminando no ponto do drop. */
+export function buildUp(p: EditProject, g: Grid, drop: number, riserId?: string): EditProject {
+  const b = barLen(g);
+  const t0 = Math.max(0, drop - 4 * b);
+  let q = addEffect(p, 'subida', t0, drop);
+  if (riserId) q = addSound(q, riserId, t0, 0.8);
+  return q;
 }

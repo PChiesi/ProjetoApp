@@ -13,6 +13,9 @@ import {
   projectLength,
   snapTime,
   toSource,
+  addSound,
+  addEffect,
+  echoOut,
 } from './edit';
 import { computeWaveform } from '../audio/analysis';
 import { DEMOS, renderDemo } from '../audio/demoTracks';
@@ -88,5 +91,35 @@ describe('seções e modelos', () => {
   it('"Versão estendida" aumenta 32 compassos', () => {
     const p = applyTemplate('estendida', 't', dur, grid, sections);
     expect(projectLength(p)).toBeCloseTo(dur + 32 * barLen(grid), 1);
+  });
+});
+
+describe('sons e efeitos acompanham a edição', () => {
+  it('apagar antes de um som puxa o som para trás', () => {
+    let p = addSound(newProject('t', 100), 'buzina', 50);
+    p = deleteRange(p, 10, 20);
+    expect(p.sounds[0].at).toBeCloseTo(40);
+  });
+  it('apagar o trecho do som remove o som', () => {
+    let p = addSound(newProject('t', 100), 'buzina', 15);
+    p = deleteRange(p, 10, 20);
+    expect(p.sounds).toHaveLength(0);
+  });
+  it('repetir um trecho empurra os efeitos de depois', () => {
+    let p = addEffect(newProject('t', 100), 'eco', 30, 34);
+    p = duplicateRange(p, 0, 8);
+    expect(p.effects[0].t0).toBeCloseTo(38);
+    expect(p.effects[0].t1).toBeCloseTo(42);
+  });
+  it('apagar parte de um efeito encurta o efeito', () => {
+    let p = addEffect(newProject('t', 100), 'abafar', 10, 30);
+    p = deleteRange(p, 20, 40);
+    expect(p.effects[0].t0).toBeCloseTo(10);
+    expect(p.effects[0].t1).toBeCloseTo(20);
+  });
+  it('saída com eco = eco + corte', () => {
+    const p = echoOut(newProject('t', 100), g, 50);
+    expect(p.effects.map((f) => f.type)).toEqual(['eco', 'corte']);
+    expect(p.effects[0].t0).toBeCloseTo(48);
   });
 });
