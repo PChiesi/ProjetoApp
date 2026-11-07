@@ -131,6 +131,7 @@ export async function loadFile(ctx: AudioContext, file: File): Promise<Track> {
     duration: buffer.duration,
     confidence: tempo.confidence,
     buffer,
+    source: file,
     waveform,
     demo: false,
     hotCues: new Array(8).fill(null),
@@ -140,3 +141,11 @@ export async function loadFile(ctx: AudioContext, file: File): Promise<Track> {
 }
 
 export const AUDIO_ACCEPT = '.mp3,.wav,.flac,.ogg,.m4a,.aac,audio/*';
+
+/** Garante o áudio decodificado (músicas salvas só são decodificadas quando usadas). */
+export async function ensureBuffer(ctx: AudioContext, t: Track): Promise<AudioBuffer> {
+  if (t.buffer) return t.buffer;
+  if (!t.source) throw new Error('sem áudio');
+  t.buffer = await ctx.decodeAudioData(await t.source.arrayBuffer());
+  return t.buffer;
+}

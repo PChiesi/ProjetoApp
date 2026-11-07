@@ -11,6 +11,7 @@ interface Props {
   onLoad: (deck: DeckId, track: Track) => void;
   onFiles: (files: FileList) => void;
   onEdit: (track: Track) => void;
+  onRemove: (track: Track) => void;
   editing?: string;
 }
 
@@ -25,7 +26,7 @@ function fits(t: Track, ref: Track | null): boolean {
   return near && key !== 'conflito';
 }
 
-export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, editing }: Props) {
+export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, onRemove, editing }: Props) {
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<Filter>('todas');
   const input = useRef<HTMLInputElement>(null);
@@ -129,7 +130,14 @@ export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, edit
               <span>{t.genre ?? '—'}</span>
               <span className="num">{t.bpm.toFixed(t.bpm % 1 ? 1 : 0)}</span>
               <span className={`key-cell ${kA === 'ok' ? 'ok' : kA === 'conflito' ? 'bad' : kA === 'risco' ? 'risk' : ''}`}>{t.key ?? '—'}</span>
-              <span className="num">{fmtTime(t.duration)}</span>
+              <span className="num dur-cell">
+                {fmtTime(t.duration)}
+                {!t.demo && (
+                  <button className="row-x" onClick={() => onRemove(t)} aria-label={`Remover ${t.title} da biblioteca`} title="Remover da biblioteca">
+                    ✕
+                  </button>
+                )}
+              </span>
             </div>
           );
         })}

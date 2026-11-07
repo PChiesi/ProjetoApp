@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AudioEngine, type DeckId, type Track } from './audio/engine';
 import { beatInfo } from './audio/beat';
-import { loadAllDemos, loadFile } from './audio/library';
+import { ensureBuffer, loadAllDemos, loadFile } from './audio/library';
+import { del, getAll, put, recordToTrack, saveTrackState, trackToRecord, type SoundRecord, type StateRecord, type TrackRecord } from './storage/db';
+import { encodeWav } from './studio/render';
 import { coachTip, TransitionJudge, type Snapshot, type Tip, type TransitionResult } from './coach/coach';
 import { DeckPanel } from './components/DeckPanel';
 import { Library } from './components/Library';
@@ -49,12 +51,32 @@ export default function App() {
   // Músicas demo: som em segundos, sem procurar nada.
   useEffect(() => {
     let alive = true;
-    loadAllDemos(engine.ctx).then((demos) => {
+    (async () => {
+      const demos = await loadAllDemos(engine.ctx);
       if (!alive) return;
-      setTracks((t) => [...demos, ...t]);
+      // Hot cues e ajustes de grid salvos das demos
+      const states = await getAll<StateRecord>('state');
+      for (const st of states) {
+        const d = demos.find((x) => x.id === st.id);
+        if (d) Object.assign(d, { hotCues: st.hotCues, bpm: st.bpm, firstBeat: st.firstBeat });
+      }
+      // Músicas dela (o áudio só é decodificado quando for usado)
+      const saved = (await getAll<TrackRecord>('tracks')).sort((a, b) => a.addedAt - b.addedAt).map(recordToTrack);
+      if (!alive) return;
+      setTracks((t) => [...demos, ...saved, ...t]);
       engine.decks.A.load(demos[0]);
       engine.decks.B.load(demos[1]);
-    });
+      if (saved.length) toast(`Biblioteca carregada: ${saved.length} música${saved.length > 1 ? 's' : ''} sua${saved.length > 1 ? 's' : ''}.`);
+      // Vinhetas e sons dela
+      for (const r of await getAll<SoundRecord>('sounds')) {
+        try {
+          const buffer = await engine.ctx.decodeAudioData(await r.wav.arrayBuffer());
+          bank.add({ id: r.id, name: r.name, icon: r.icon, buffer, user: true });
+        } catch {
+          /* som corrompido: ignora */
+        }
+      }
+    })();
     return () => {
       alive = false;
     };
@@ -83,6 +105,7 @@ export default function App() {
         try {
           const t = await loadFile(engine.ctx, f);
           setTracks((ts) => [...ts, t]);
+          put('tracks', trackToRecord(t, f));
           if (toDeck && f === list[0]) engine.decks[toDeck].load(t);
         } catch {
           toast(`Não consegui abrir "${f.name}". O arquivo pode estar corrompido ou em formato não suportado.`);
@@ -101,10 +124,67 @@ export default function App() {
         toast(`O Deck ${id} está tocando no som principal! Abaixe o volume dele antes de trocar a música.`);
         return;
       }
-      d.load(t);
+      if (t.buffer) d.load(t);
+      else
+        ensureBuffer(engine.ctx, t)
+          .then(() => d.load(t))
+          .catch(() => toast(`Não consegui abrir "${t.title}".`));
     },
     [toast],
   );
+
+  const openStudio = useCallback(
+    (t: Track | null) => {
+      if (!t) return;
+      ensureBuffer(engine.ctx, t)
+        .then(() => {
+          setStudioTrack(t);
+          setView('studio');
+        })
+        .catch(() => toast(`Não consegui abrir "${t.title}".`));
+    },
+    [toast],
+  );
+
+  const removeTrack = useCallback(
+    (t: Track) => {
+      if (engine.decks.A.track === t || engine.decks.B.track === t) {
+        toast('Essa música está num deck. Troque a música do deck antes de remover.');
+        return;
+      }
+      if (!window.confirm(`Remover "${t.title}" da biblioteca?`)) return;
+      setTracks((ts) => ts.filter((x) => x !== t));
+      if (studioTrack === t) {
+        setStudioTrack(null);
+        setView('decks');
+      }
+      del('tracks', t.id);
+    },
+    [toast, studioTrack],
+  );
+
+  // Salva hot cues e ajustes de grid (1 s depois da última mudança).
+  useEffect(() => {
+    let timer = 0;
+    const last = new Map<string, string>();
+    const unsub = engine.subscribe(() => {
+      clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        for (const d of [engine.decks.A, engine.decks.B]) {
+          const t = d.track;
+          if (!t) continue;
+          const sig = JSON.stringify([t.hotCues, t.bpm, t.firstBeat]);
+          if (last.get(t.id) !== sig) {
+            last.set(t.id, sig);
+            saveTrackState(t);
+          }
+        }
+      }, 1000);
+    });
+    return () => {
+      unsub();
+    };
+  }, []);
 
   // Coach: dicas e avaliação das transições.
   const judge = useRef(new TransitionJudge());
@@ -274,8 +354,8 @@ export default function App() {
               aria-selected={view === 'studio'}
               className={`tab ${view === 'studio' ? 'on' : ''}`}
               onClick={() => {
-                if (!studioTrack) setStudioTrack(engine.decks.A.track ?? tracks[0] ?? null);
-                setView('studio');
+                if (studioTrack) setView('studio');
+                else openStudio(engine.decks.A.track ?? tracks[0] ?? null);
               }}
             >
               ✂ Estúdio
@@ -303,11 +383,20 @@ export default function App() {
             engine={engine}
             track={studioTrack}
             onExit={() => setView('decks')}
-            onSaved={(t) => setTracks((ts) => [...ts, t])}
+            onSaved={(t) => {
+              setTracks((ts) => [...ts, t]);
+              put('tracks', trackToRecord(t, encodeWav(t.buffer!)));
+            }}
             toast={toast}
             bank={bank}
-            onUserSound={(snd) => bank.add(snd)}
-            onRemoveUserSound={(id) => bank.remove(id)}
+            onUserSound={(snd) => {
+              bank.add(snd);
+              put('sounds', { id: snd.id, name: snd.name, icon: snd.icon, wav: encodeWav(snd.buffer) } satisfies SoundRecord);
+            }}
+            onRemoveUserSound={(id) => {
+              bank.remove(id);
+              del('sounds', id);
+            }}
           />
         ) : (
         <>
@@ -353,10 +442,7 @@ export default function App() {
         </>
         )}
 
-        <Library engine={engine} tracks={tracks} pending={pending} onLoad={loadToDeck} onFiles={(f) => addFiles(f)} onEdit={(t) => {
-          setStudioTrack(t);
-          setView('studio');
-        }} editing={view === 'studio' ? studioTrack?.id : undefined} />
+        <Library engine={engine} tracks={tracks} pending={pending} onLoad={loadToDeck} onFiles={(f) => addFiles(f)} onEdit={openStudio} onRemove={removeTrack} editing={view === 'studio' ? studioTrack?.id : undefined} />
 
         <div className="toasts" aria-live="polite">
           {toasts.map((t) => (

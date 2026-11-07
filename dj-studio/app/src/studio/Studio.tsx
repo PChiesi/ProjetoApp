@@ -112,7 +112,7 @@ export function Studio({ engine, track, onExit, onSaved, toast, bank, onUserSoun
         decks.forEach((d) => d.pause());
         toast('Pausei os decks para você ouvir o Estúdio.');
       }
-      player.play(track.buffer, p, Math.min(from, projectLength(p) - 0.05), opts, () => setPlaying(false));
+      player.play(track.buffer!, p, Math.min(from, projectLength(p) - 0.05), opts, () => setPlaying(false));
       setPlaying(true);
     },
     [engine, player, project, toast, track.buffer],
@@ -215,7 +215,7 @@ export function Studio({ engine, track, onExit, onSaved, toast, bank, onUserSoun
     stop();
     setBusy(true);
     try {
-      const buf = await renderProject(track.buffer, project, opts);
+      const buf = await renderProject(track.buffer!, project, opts);
       const title = `${track.title.replace(/ \(Edit.*\)$/, '')} (Edit)`;
       if (mode === 'download') {
         const url = URL.createObjectURL(encodeWav(buf));

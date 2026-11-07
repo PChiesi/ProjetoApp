@@ -18,7 +18,10 @@ export interface Track {
   key: string | null;
   duration: number;
   confidence: number;
-  buffer: AudioBuffer;
+  /** Áudio decodificado — carregado só quando a música vai para um deck ou o Estúdio. */
+  buffer: AudioBuffer | null;
+  /** Arquivo original (para decodificar sob demanda). */
+  source?: Blob;
   waveform: Waveform;
   demo: boolean;
   /** 8 hot cues (segundos) — ficam guardados na música. */
@@ -372,6 +375,7 @@ export class Deck {
 
   private startSource(at: number) {
     if (!this.track) return;
+    if (!this.track.buffer) return;
     const src = this.ctx.createBufferSource();
     src.buffer = this.track.buffer;
     src.playbackRate.value = this.playbackRate;

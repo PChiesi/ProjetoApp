@@ -310,3 +310,8 @@ kbd { background: var(--panel-2); border: 1px solid var(--line); border-bottom-w
 
 .btn.tiny.keylock { color: var(--muted); }
 .btn.tiny.keylock.on { color: #0d0e14; background: var(--warn); border-color: var(--warn); }
+
+.dur-cell { display: flex; align-items: center; gap: 6px; }
+.row-x { background: none; border: none; color: var(--muted); cursor: pointer; opacity: 0; padding: 2px 4px; border-radius: 4px; }
+.lib-row:hover .row-x, .row-x:focus-visible { opacity: 1; }
+.row-x:hover { color: var(--bad); background: var(--panel); }
