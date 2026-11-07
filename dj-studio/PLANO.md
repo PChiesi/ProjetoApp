@@ -102,6 +102,9 @@ torna a interface muito mais lenta de iterar, e UX é o diferencial deste projet
 - Modo **Remix Studio**: linha do tempo simples de 4 pistas para montar mashups (vocal da música A sobre batida da B), exportar em WAV.
 - Loops gravados ao vivo (capturar 4 batidas de um deck para um pad do sampler).
 
+### Estúdio (edição de faixas)
+- Cortar, estender, apagar e reordenar partes da música; fades; inserir sons (vinheta, efeitos sonoros) e efeitos em trechos; exportar. Especificação completa na **seção 13**.
+
 ### Transversal
 - Mapeamento MIDI com "aprender" (mexe no botão da controladora → associa ao controle na tela) + perfis prontos para controladoras populares.
 - Atalhos de teclado completos (overlay com `?`).
@@ -200,15 +203,17 @@ Fundo escuro (cabine), um tom de destaque por deck (ex.: A = ciano, B = magenta)
 
 ## 7. Roteiro (marcos)
 
-| Fase | Entrega | Critério de pronto |
-|---|---|---|
-| **0. Fundação** (1–2 sem.) | Repositório, Vite+React+TS, AudioEngine com 1 deck tocando arquivo local, CI com testes. | Toca, pausa, mostra waveform estática. |
-| **1. MVP "Primeira mixagem"** (4–6 sem.) | 2 decks, mixer completo, crossfader, BPM/grid, sync, key lock, biblioteca, gravação, pack demo. | Ela consegue gravar uma mixagem de 2 músicas sem ajuda. |
-| **2. Coach v1** (3–4 sem.) | Lições 1–7, medidor de alinhamento, contador de frase, modos Iniciante/Intermediário. | Completar as lições 1–7 sozinha; feedback dela registrado. |
-| **3. Controle criativo** (4 sem.) | Hot cues, loops, FX, sampler, lições 8–10, atalhos, MIDI learn. | Usar com uma controladora real. |
-| **4. Seleção e set** (3 sem.) | Camelot, sugestões, playlists, frases, relatório pós-set, lições 11–12. | Gravar um set de 30 min. |
-| **5. Remix** (6+ sem.) | Stems com ONNX/WebGPU, Remix Studio, captura de loops. | Exportar um mashup. |
-| **6. Desktop** (2 sem.) | Empacotar com Tauri, instalador Windows/macOS, atalho na área de trabalho. | Instalar com duplo clique. |
+> Reorganizado depois da pesquisa de mercado (seção 11). A ordem segue o backlog priorizado da seção 12.
+
+| Fase | Entrega | Critério de pronto | Status |
+|---|---|---|---|
+| **0. Fundação** | Projeto, motor de áudio, testes, arquivo único para Windows. | Toca e mostra a onda. | ✅ feito |
+| **1. MVP "Primeira mixagem"** | 2 decks, mixer, crossfader, BPM/grid, sync, biblioteca, gravação, músicas demo. | Ela grava uma mixagem de 2 músicas sem ajuda. | ✅ feito (falta key lock → fase 2) |
+| **2. Fundamentos que todo software tem** (P0) | Key lock, detecção de tom, hot cues, loops, quantize, auto gain, biblioteca salva, fone/pré-escuta, controladora DDJ-FLX4. | Tocar um set de 20 min na controladora usando cues e loops. | próximo |
+| **3. Estúdio v1 + criatividade** (P1) | **Editor de faixas** (cortar, estender, apagar, fades, inserir sons e efeitos, exportar), efeitos, sampler com vinheta, lições guiadas 1–12. | Ela faz a própria "versão estendida" de uma música e toca no set. | |
+| **4. Inteligência** (P2) | Stems, transições prontas, sugestão da próxima música, playlists/histórico, Automix que explica, relatório pós-set. | Set de 30 min com transições entre pop, rock e funk. | |
+| **5. Remix** (P3) | Estúdio multipista (mashup / "Versão funk"), batidas prontas (tamborzão), grid dinâmico, slicer, Flux. | Exportar um mashup próprio. | |
+| **6. Desktop** | Instalador Windows com Tauri, atalho na área de trabalho, pastas de música. | Instalar com duplo clique. | |
 
 **Teste com usuária real desde a fase 1**: a cada entrega, observar ela usando (sem explicar nada), anotar onde travou, corrigir. Esse ciclo é o que torna a UX boa.
 
@@ -274,7 +279,191 @@ Acrescentam-se à trilha da seção 5: **"Corte seco no funk"**, **"Subindo a en
 
 ### Próximos
 1. Testar com ela: abrir o `Pista.html`, deixar ela tocar sem explicar nada, anotar onde travou.
-2. Key lock (mudar o BPM sem mudar o tom) e detecção de tom para os arquivos dela.
-3. Trilha de lições guiadas (seção 5.1 + 9.2) com progresso salvo.
-4. Mapeamento da DDJ-FLX4 (Web MIDI) e saída de fone pela placa da controladora.
-5. Hot cues, loops, efeitos e sampler com vinheta.
+2. Seguir o backlog da **seção 12**, de cima para baixo: primeiro os itens P0 (key lock, tom, hot cues, loops, controladora), depois o **Estúdio** (P1).
+
+---
+
+## 11. Pesquisa de mercado: o que os principais softwares oferecem
+
+Pesquisa feita em novembro de 2026. Fontes no fim da seção.
+
+### 11.1 Quem é quem
+
+| Software | Perfil | Pontos fortes | Pontos fracos para ela |
+|---|---|---|---|
+| **rekordbox** (AlphaTheta/Pioneer) | O mais usado (34% num censo de DJs de 2026). Padrão das cabines com equipamento Pioneer. | Preparo de músicas para o CDJ, stems de 3 e 4 partes (desde a v7.2.8), **modo Edit** para cortar/estender faixas, "Intelligent Cue", sugestões de músicas relacionadas, nuvem. | Assinatura; o modo Edit fica no plano pago; interface densa para iniciante. |
+| **Serato DJ Pro** | 27% dos DJs. Favorito de quem faz scratch e usa controladoras. | Estável, stems com efeitos por stem (Stems FX), licença única; **Serato Studio** para fazer edits e beats e passar para o DJ Pro. | Duas ferramentas separadas para tocar e editar. |
+| **VirtualDJ** | ~17%. O mais abrangente; grátis para uso doméstico. | Maior suporte a controladoras, Stems 2.0 em tempo real, **Sandbox** (ensaiar no fone sem o público ouvir), pontos de ação na música (POI). | Visual carregado, muitas opções. |
+| **Traktor Pro 4** (Native Instruments) | Mixagem criativa em 4 decks. | Stems, **Remix Decks** (samples no tempo), **Pattern Player** (bateria pronta), **Flux** (brinca e volta no tempo certo), grid flexível. | Curva de aprendizado alta. |
+| **djay Pro** (Algoriddim) | Melhor no iPad/celular e para iniciantes. | **Neural Mix** (stems), **Crossfader Fusion** (transições prontas com filtros e efeitos), **Automix AI**, cursos para iniciante, streaming. | Recursos de IA na assinatura. |
+| **Mixxx** | Grátis e de código aberto. | Auto DJ, correção do grid, detecção de tom, efeitos encadeados, samplers, MIDI. | Visual e recursos de aprendizado limitados. |
+
+### 11.2 Funcionalidades que aparecem em todos (ou quase)
+
+| # | Funcionalidade | rekordbox | Serato | VirtualDJ | Traktor | djay | Mixxx | Pista |
+|---|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| 1 | BPM, grid e sync | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✅ |
+| 2 | EQ 3 bandas, filtro, crossfader | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✅ |
+| 3 | Key lock (BPM sem mudar o tom) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ⏳ |
+| 4 | Detecção de tom / mixagem harmônica | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | parcial (só demos) |
+| 5 | Hot cues (8 por música) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ⏳ |
+| 6 | Loops automáticos e loop roll | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ⏳ |
+| 7 | Quantize (tudo cai na batida) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ⏳ |
+| 8 | Efeitos no tempo (eco, reverb, flanger…) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ⏳ |
+| 9 | Sampler / pads | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ⏳ |
+| 10 | Stems (vocal, batida, baixo…) | ✓ | ✓ | ✓ | ✓ | ✓ | — | ⏳ |
+| 11 | Biblioteca com playlists e histórico | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | parcial |
+| 12 | Controladoras MIDI | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ⏳ |
+| 13 | Pré-escuta no fone | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ⏳ |
+| 14 | Gravação do set | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✅ |
+| 15 | Automix | ✓ | — | ✓ | — | ✓ | ✓ | ⏳ |
+
+### 11.3 Diferenciais que valem copiar (adaptados para quem está aprendendo)
+
+| Ideia | De onde vem | Como entra na Pista |
+|---|---|---|
+| **Modo Edit** (cortar, colar, inserir, apagar, preso ao grid; paleta de trechos) | rekordbox | Base do **Estúdio** (seção 13), mas grátis, mais simples e com sons/efeitos. |
+| Edits e beats num app à parte | Serato Studio | Na Pista é **o mesmo app**: uma aba "Estúdio", e a faixa editada vai direto para a biblioteca. |
+| **Transições prontas** com filtros e efeitos | djay (Crossfader Fusion) | "Transições prontas" no crossfader, **com explicação** do que cada uma faz, para ela aprender e depois fazer na mão. |
+| **Automix** | djay, VirtualDJ, Mixxx | "Automix que explica": o app mixa sozinho e narra o que fez ("baixei o grave do B aqui"). Serve de aula. |
+| **Sandbox** | VirtualDJ | "Ensaiar": testa uma transição no fone enquanto a música segue no ar. |
+| Músicas relacionadas, cue automático | rekordbox | Sugestão da próxima música e cues automáticos (intro, refrão, outro). |
+| **Pattern Player** | Traktor | "Batidas prontas" com kits de **tamborzão, 150 e pop/rock**, para tocar por cima e fazer remix. |
+| **Flux** | Traktor | Brincar com cues e scratch sem perder o tempo da música. |
+| Stems com efeitos por parte | Serato, Traktor | Eco só no vocal, filtro só na batida. |
+| Cursos para iniciante | djay | A Pista já nasce com o Coach e as lições (seção 5). |
+
+### Fontes
+- [The Best DJ Software of 2026 — DJ.Studio](https://dj.studio/blog/best-dj-software-2023) e [Pro DJ Software Landscape 2026](https://dj.studio/blog/pro-dj-software-landscape-top-tier) (o DJ.Studio vende o próprio software; usar os rankings com cuidado)
+- [Serato vs Rekordbox in 2026 — Digital DJ Pool](https://digitaldjpool.com/blog/serato-vs-rekordbox/)
+- [rekordbox v7.2.8 release information](https://rekordbox.com/en/2025/12/rekordbox-v728-release-information/) e [Digital DJ Tips: 4-stem separation](https://www.digitaldjtips.com/rekordbox-v7-2-8-adds-4-stem-separation/)
+- [How To Make DJ Edits With Rekordbox Edit Mode — Digital DJ Tips](https://www.digitaldjtips.com/dj-edits-rekordbox-6-1-edit-feature-guide/) e [DJ Mag](https://djmag.com/news/you-can-now-make-your-own-extended-edits-rekordbox-611)
+- [Serato DJ Pro](https://serato.com/dj-pro) e [Serato Studio 2.4.0](https://serato.com/studio/downloads/2.4.0)
+- [VirtualDJ Software Review 2026 — DJGear2k](https://djgear2k.com/virtual-dj-software-review/)
+- [Traktor Pro 4 — Native Instruments](https://native-instruments.com:443/en/products/traktor/dj-software/traktor-pro-4) e [review da MusicTech](https://musictech.com/reviews/dj/native-instruments-traktor-4-pro/)
+- [djay — recursos (Algoriddim)](https://www.algoriddim.com/features) e [djay Pro 5 (Engadget)](https://www.engadget.com/ai-joins-you-in-the-dj-booth-with-algoriddims-djay-pro-5-150007224.html)
+- [Mixxx — Tech2Geek](https://www.tech2geek.net/mixxx-the-best-free-and-open-source-dj-software-for-windows-macos-and-linux)
+
+---
+
+## 12. Backlog priorizado
+
+Critério: **1)** o que todo DJ usa e ela vai encontrar em qualquer cabine; **2)** o que ela pediu (editar faixas); **3)** o que acelera o aprendizado; **4)** o resto.
+Esforço: P = pequeno (dias), M = médio (1–2 semanas), G = grande (3+ semanas).
+
+### P0 — Fundamentos (ninguém leva a sério um software de DJ sem isso)
+| # | Funcionalidade | Por que para ela | Esforço | Status |
+|---|---|---|---|---|
+| 1 | **Key lock** (mudar BPM sem virar "voz de esquilo") | Pop com vocal fica estranho a +4% sem isso. | M | ⏳ |
+| 2 | **Detecção de tom** nas músicas dela | Libera as cores de tom e o filtro "Combinam". | M | ⏳ |
+| 3 | **Hot cues** (8 por música, coloridos, salvos) | Marcar o refrão, o drop, a vinheta. | P | ⏳ |
+| 4 | **Loops** (1/4 a 32 batidas, dobrar/dividir, loop roll) | Estender a intro enquanto prepara a próxima. | P | ⏳ |
+| 5 | **Quantize** (cue/loop/play caem na batida) | Iniciante erra o tempo; quantize perdoa. | P | ⏳ |
+| 6 | **Auto gain** (volume igual entre músicas) | Funk e rock costumam ter volumes muito diferentes. | P | ⏳ |
+| 7 | **Biblioteca salva** (músicas, análise e cues ficam entre sessões) | Hoje ela precisa recarregar tudo ao abrir. | M | ⏳ |
+| 8 | **Controladora DDJ-FLX4** + saída de fone pela placa dela | Ela vai comprar; é o que transforma em prática real. | M | ⏳ |
+| 9 | **Pré-escuta (CUE de fone)** por canal | Ouvir a próxima antes do público. | P (com a FLX4) | ⏳ |
+
+### P1 — Estúdio e criatividade (o pedido dela)
+| # | Funcionalidade | Por que para ela | Esforço | Status |
+|---|---|---|---|---|
+| 10 | **Estúdio v1: editor de faixas** — cortar, estender, apagar, mover, fades, exportar (seção 13) | Fazer a própria versão estendida/rádio/"pro baile". | G | ⏳ |
+| 11 | **Estúdio: inserir sons** — vinheta gravada no microfone, efeitos sonoros, sons próprios | Toda DJ de funk tem vinheta. | M | ⏳ |
+| 12 | **Estúdio: efeitos em trechos** — eco, reverb, filtro, freio, reverse, gate, volume | Criar viradas e saídas na própria faixa. | M | ⏳ |
+| 13 | **Efeitos ao vivo** no tempo da música (eco, reverb, flanger, filtro, freio, spinback) | Todos os softwares têm; essenciais nas transições. | M | ⏳ |
+| 14 | **Sampler** com 8 pads (a vinheta dela, buzina, sirene, risers) | Uso ao vivo dos sons do Estúdio. | P | ⏳ |
+| 15 | **Trilha de lições** guiadas com progresso (seções 5.1 e 9.2) | O diferencial da Pista. | M | ⏳ |
+
+### P2 — Inteligência que ensina
+| # | Funcionalidade | Inspiração | Esforço |
+|---|---|---|---|
+| 16 | **Stems** (vocal / batida / baixo / melodia) nos decks e no Estúdio | Todos menos Mixxx | G |
+| 17 | **Transições prontas** com explicação | djay Crossfader Fusion | M |
+| 18 | **Sugestão da próxima música** (BPM, tom, energia, gênero) | rekordbox Related Tracks | P |
+| 19 | **Cue automático** (intro, refrão, breakdown, outro) | rekordbox Intelligent Cue | M |
+| 20 | **Playlists, histórico de sets** e tags de energia | Todos | P |
+| 21 | **Automix que explica** | djay, VirtualDJ, Mixxx | M |
+| 22 | **Relatório pós-set** (seção 5.3) | — (diferencial) | M |
+| 23 | **Ensaiar** no fone (sandbox) | VirtualDJ | M |
+
+### P3 — Remix e performance avançada
+| # | Funcionalidade | Inspiração | Esforço |
+|---|---|---|---|
+| 24 | **Estúdio multipista**: mashup e modelo "Versão funk" (vocal pop sobre tamborzão) | Serato Studio | G |
+| 25 | **Batidas prontas** (kits tamborzão, 150, pop, rock) | Traktor Pattern Player | M |
+| 26 | **Grid dinâmico** para rock ao vivo | Traktor flexible beatgrid, djay | M |
+| 27 | **Slicer** e **Flux** | Serato, Traktor | M |
+| 28 | Efeitos por stem | Serato Stems FX | M |
+| 29 | 4 decks | Traktor, VirtualDJ | M |
+
+### P4 — Depois (ou nunca)
+Streaming (TIDAL, SoundCloud, Beatport exigem parceria comercial), vinil digital (DVS), vídeo, transmissão ao vivo, nuvem. Nada disso ajuda a aprender agora.
+
+---
+
+## 13. Estúdio — o editor de faixas
+
+**Objetivo:** ela pega uma música e faz a **versão dela**: intro mais longa para mixar, sem a parte chata, com a vinheta no começo, um eco na saída. Inspirado no modo Edit do rekordbox e no Serato Studio, mas pensado para quem nunca abriu um editor de áudio.
+
+### 13.1 Princípios
+- **Tudo preso ao grid** (por padrão em compassos; dá para trocar para batidas ou livre). Assim nenhum corte "tropeça" no ritmo.
+- **Não destrutivo:** o arquivo original nunca muda. O Estúdio guarda uma "receita" (lista de trechos, sons e efeitos) e só gera áudio ao exportar.
+- **Desfazer/refazer ilimitado** (Ctrl+Z / Ctrl+Y) e salvamento automático do projeto.
+- **Seções coloridas** (Intro, Verso, Refrão, Breakdown, Outro) sugeridas pela análise; ela arrasta seções inteiras como blocos de Lego.
+- **Ouvir sempre:** espaço toca/pausa a partir do cursor; ao passar o mouse sobre um corte, toca os 2 compassos em volta.
+
+### 13.2 Tela
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│ ◀ Voltar aos decks    ESTÚDIO · "Verão em Neon (Edit da Ana)"     ↶ ↷   Exportar ▸ │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│ Ferramentas: [✂ Cortar] [⧉ Duplicar] [🗑 Apagar] [↔ Estender] [◢ Fade]   Grade: 1 compasso ▾ │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│ régua │1        │9        │17       │25       │33       │41                       │
+│ seções│▓ INTRO ▓│▓ VERSO ▓│▓ REFRÃO▓│▒ BREAK ▒│▓ REFRÃO▓│▓ OUTRO ▓                │
+│ MÚSICA│▁▂▅▇█▇▅▃▂▁▂▅▇█▇▅▃▂▁▂▅▇█▇▅▃▂▁▂▃▂▁▁▂▃▅▇█▇▅▃▂▁▂▅▇█▇▅▃▂▁▂▅▇█▇▅          │
+│ SONS  │ [🎤 vinheta]                         [📯 buzina]           [🚨 sirene]    │
+│ EFEITO│                      ════eco════                           ═filtro═══►   │
+│ VOLUME│ ╱‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾╲ (fades) │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│ PALETA: [Refrão 8c] [Batida 4c] [Vocal "ê"]  ← arraste trechos guardados           │
+│ SONS:   🎤 Gravar vinheta · 📯 Buzina · 🚨 Sirene · 💥 Impacto · ⬆ Riser · + Importar │
+│ EFEITOS: Eco · Reverb · Filtro · Freio · Reverse · Gate · Stutter · Volume         │
+└──────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 13.3 Funções, em ordem de entrega
+
+**v1 — editar a música (P1, item 10)**
+1. Abrir qualquer música da biblioteca no Estúdio (botão "Editar" na linha ou no deck).
+2. Selecionar um trecho arrastando na onda (gruda nos compassos).
+3. **Cortar / apagar** o trecho; o resto "fecha o buraco" sem perder o ritmo.
+4. **Duplicar** um trecho (ex.: repetir o refrão) e **mover** blocos.
+5. **Estender intro/outro**: botão "Intro +8 compassos" repete a batida inicial (o uso mais comum em edits de DJ).
+6. **Fades** de entrada e saída arrastando a ponta do bloco.
+7. **Paleta**: guardar trechos para reutilizar.
+8. **Exportar** em WAV (e MP3 quando possível) e **adicionar à biblioteca** com BPM, grid e cues herdados.
+9. Modelos de um clique: **"Versão estendida"** (intro e outro de 16 compassos), **"Versão rádio"** (corta para ~3 min), **"Pro baile"** (tira o breakdown longo).
+
+**v2 — inserir sons (P1, item 11)**
+1. **Gravar vinheta** pelo microfone: contagem 3-2-1, corte automático do silêncio, normalização. Fica salva e vai para o sampler também.
+2. Biblioteca de sons **sintetizados pelo próprio app** (sem direitos autorais): buzina, sirene, impacto, riser, "rewind", palmas. Mais tarde, um pack de sons livres.
+3. **Importar** sons próprios (WAV/MP3).
+4. Arrastar o som para a faixa SONS; ele gruda na batida; volume e fade por som.
+
+**v3 — efeitos em trechos (P1, item 12)**
+1. Pintar um efeito sobre um trecho na faixa EFEITO: eco (1/4, 1/2, 1 batida), reverb, filtro (passa-baixa/alta com rampa), **freio** (vinil parando), **reverse**, gate/stutter, volume.
+2. Automação simples: o efeito pode "subir" ao longo do trecho (ex.: filtro abrindo até o drop).
+3. Atalhos prontos: **"Saída com eco"** no último compasso e **"Subida pro drop"** (filtro + riser) nos 4 compassos antes do refrão.
+
+**v4 — multipista e stems (P3, item 24)**
+Várias músicas na mesma linha do tempo, stems por pista (vocal da música A + batida da música B), modelo **"Versão funk"** (acapella de pop sobre tamborzão das batidas prontas).
+
+### 13.4 Como construir
+- Projeto = JSON com a lista de blocos `{origem, início, fim, posição}`, sons e efeitos; salvo no IndexedDB.
+- Reprodução no editor com o mesmo motor dos decks (agendando os blocos na linha do tempo do Web Audio).
+- Exportação com `OfflineAudioContext` (renderiza mais rápido que tempo real) e codificação WAV em JavaScript; MP3 com codificador em WASM.
+- Os cortes usam o grid já detectado; uma rampa de 5 ms em cada emenda evita estalos.
+- Lição nova no Coach: **"Minha primeira edit"** (estender a intro em 8 compassos e exportar).
+
