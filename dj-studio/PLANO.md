@@ -277,11 +277,16 @@ Acrescentam-se à trilha da seção 5: **"Corte seco no funk"**, **"Subindo a en
 - [x] **Coach v1**: medidor de alinhamento, contador 1-2-3-4 / compasso x/8, semáforo de tom, dicas contextuais com o controle destacado na tela, e **nota com estrelas** a cada transição.
 - [x] Níveis Iniciante / Intermediário / Pro, boas-vindas com o nome dela, atalhos de teclado, gravação do set.
 - [x] **Hot cues** (8 pads coloridos; o salto mantém o ritmo), **loops** de 1/4 a 32 batidas com ½/×2, **quantize** e **auto gain** (níveis Intermediário/Pro).
+- [x] **Estúdio v2/v3**: faixas de SONS e EFEITOS na linha do tempo; **gravar vinheta pelo microfone** (3-2-1, corta silêncio, normaliza); 7 sons de fábrica sintetizados (buzina, sirene, impacto, riser, rewind, palmas, laser); importar sons; efeitos em trechos (eco, reverb, abafar, subida, picotar, freio, ao contrário, corte); atalhos "Saída com eco" e "Subida pro drop"; sons e efeitos acompanham os cortes.
+- [x] **Key lock** (AudioWorklet, verificado: 440 Hz a +5% continua em 440 Hz) e **detecção de tom** (Camelot) nas músicas importadas.
+- [x] **Biblioteca salva** no navegador: músicas, edições, vinhetas, hot cues e grid continuam lá ao reabrir; remover músicas.
+- [x] **DDJ-FLX4**: play, cue, sync, fone, load, browse, tempo (14 bits), volume, ganho, EQ, filtro, crossfader, pratos, pads (hot cue, beat loop, beat jump, sampler), loops, luzes; modo **Aprender** para remapear qualquer controle; **pré-escuta no fone** (fone dividido ou placa de 4 canais da controladora) e escolha da placa de som.
 - [x] **Estúdio v1**: abrir qualquer música (✎ na biblioteca), selecionar compassos arrastando, recortar/copiar/repetir/apagar, paleta de trechos para colar, Intro +8 / Final +8, fades em compassos, seções coloridas (intro/parte/breakdown/outro), modelos "Versão estendida", "Versão rádio" e "Pro baile", desfazer/refazer, ouvir, **salvar na biblioteca** (já toca nos decks) e **baixar WAV**.
 
 ### Próximos
 1. Testar com ela: abrir o `Pista.html`, deixar ela tocar sem explicar nada, anotar onde travou.
-2. Seguir o backlog da **seção 12**: P0 que faltam (key lock, detecção de tom, biblioteca salva, DDJ-FLX4 e fone) e o **Estúdio v2/v3** (inserir sons/vinheta e efeitos em trechos).
+2. Testar com a DDJ-FLX4 de verdade (mapa baseado no Mixxx; qualquer controle errado se corrige em ⚙ → "Aprender").
+3. Seguir o backlog da **seção 12**: efeitos ao vivo nos decks (item 13), painel do sampler (14), lições guiadas (15) e depois P2 (stems, transições prontas…).
 
 ---
 
@@ -356,24 +361,24 @@ Esforço: P = pequeno (dias), M = médio (1–2 semanas), G = grande (3+ semanas
 ### P0 — Fundamentos (ninguém leva a sério um software de DJ sem isso)
 | # | Funcionalidade | Por que para ela | Esforço | Status |
 |---|---|---|---|---|
-| 1 | **Key lock** (mudar BPM sem virar "voz de esquilo") | Pop com vocal fica estranho a +4% sem isso. | M | ⏳ |
-| 2 | **Detecção de tom** nas músicas dela | Libera as cores de tom e o filtro "Combinam". | M | ⏳ |
-| 3 | **Hot cues** (8 por música, coloridos) | Marcar o refrão, o drop, a vinheta. | P | ✅ (falta salvar entre sessões → item 7) |
+| 1 | **Key lock** (mudar BPM sem virar "voz de esquilo") | Pop com vocal fica estranho a +4% sem isso. | M | ✅ (ligado por padrão; botão 🔒 KEY) |
+| 2 | **Detecção de tom** nas músicas dela | Libera as cores de tom e o filtro "Combinam". | M | ✅ |
+| 3 | **Hot cues** (8 por música, coloridos) | Marcar o refrão, o drop, a vinheta. | P | ✅ |
 | 4 | **Loops** (1/4 a 32 batidas, dobrar/dividir, loop roll) | Estender a intro enquanto prepara a próxima. | P | ✅ (loop roll pendente) |
 | 5 | **Quantize** (cue/loop/play caem na batida) | Iniciante erra o tempo; quantize perdoa. | P | ✅ |
 | 6 | **Auto gain** (volume igual entre músicas) | Funk e rock costumam ter volumes muito diferentes. | P | ✅ |
-| 7 | **Biblioteca salva** (músicas, análise e cues ficam entre sessões) | Hoje ela precisa recarregar tudo ao abrir. | M | ⏳ |
-| 8 | **Controladora DDJ-FLX4** + saída de fone pela placa dela | Ela vai comprar; é o que transforma em prática real. | M | ⏳ |
-| 9 | **Pré-escuta (CUE de fone)** por canal | Ouvir a próxima antes do público. | P (com a FLX4) | ⏳ |
+| 7 | **Biblioteca salva** (músicas, análise e cues ficam entre sessões) | Hoje ela precisa recarregar tudo ao abrir. | M | ✅ |
+| 8 | **Controladora DDJ-FLX4** + saída de fone pela placa dela | Ela vai comprar; é o que transforma em prática real. | M | ✅ (a testar no aparelho real) |
+| 9 | **Pré-escuta (CUE de fone)** por canal | Ouvir a próxima antes do público. | P (com a FLX4) | ✅ |
 
 ### P1 — Estúdio e criatividade (o pedido dela)
 | # | Funcionalidade | Por que para ela | Esforço | Status |
 |---|---|---|---|---|
 | 10 | **Estúdio v1: editor de faixas** — cortar, estender, apagar, mover, fades, exportar (seção 13) | Fazer a própria versão estendida/rádio/"pro baile". | G | ✅ (MP3 pendente; exporta WAV) |
-| 11 | **Estúdio: inserir sons** — vinheta gravada no microfone, efeitos sonoros, sons próprios | Toda DJ de funk tem vinheta. | M | ⏳ |
-| 12 | **Estúdio: efeitos em trechos** — eco, reverb, filtro, freio, reverse, gate, volume | Criar viradas e saídas na própria faixa. | M | ⏳ |
+| 11 | **Estúdio: inserir sons** — vinheta gravada no microfone, efeitos sonoros, sons próprios | Toda DJ de funk tem vinheta. | M | ✅ |
+| 12 | **Estúdio: efeitos em trechos** — eco, reverb, filtro, freio, reverse, gate, volume | Criar viradas e saídas na própria faixa. | M | ✅ |
 | 13 | **Efeitos ao vivo** no tempo da música (eco, reverb, flanger, filtro, freio, spinback) | Todos os softwares têm; essenciais nas transições. | M | ⏳ |
-| 14 | **Sampler** com 8 pads (a vinheta dela, buzina, sirene, risers) | Uso ao vivo dos sons do Estúdio. | P | ⏳ |
+| 14 | **Sampler** com 8 pads (a vinheta dela, buzina, sirene, risers) | Uso ao vivo dos sons do Estúdio. | P | parcial (pads SAMPLER da FLX4 já tocam os sons; falta painel na tela) |
 | 15 | **Trilha de lições** guiadas com progresso (seções 5.1 e 9.2) | O diferencial da Pista. | M | ⏳ |
 
 ### P2 — Inteligência que ensina

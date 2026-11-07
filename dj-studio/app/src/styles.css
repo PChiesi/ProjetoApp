@@ -315,3 +315,22 @@ kbd { background: var(--panel-2); border: 1px solid var(--line); border-bottom-w
 .row-x { background: none; border: none; color: var(--muted); cursor: pointer; opacity: 0; padding: 2px 4px; border-radius: 4px; }
 .lib-row:hover .row-x, .row-x:focus-visible { opacity: 1; }
 .row-x:hover { color: var(--bad); background: var(--panel); }
+
+/* ---------- configurações / controladora ---------- */
+.settings { max-width: 720px; max-height: calc(100vh - 32px); overflow: auto; }
+.settings section { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.settings h3 { margin: 0; font-size: 15px; }
+.settings select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; font: inherit; }
+.option.disabled { opacity: 0.5; cursor: not-allowed; }
+.ok-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--good); margin-right: 4px; }
+.learn-banner { background: color-mix(in srgb, var(--warn) 18%, transparent); border: 1px solid var(--warn); border-radius: 10px; padding: 8px 10px; color: var(--text) !important; }
+.map-list { max-height: 280px; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+.map-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; padding: 4px 6px; border-radius: 6px; font-size: 13px; }
+.map-row:hover { background: var(--panel-2); }
+.map-row.learning { background: color-mix(in srgb, var(--warn) 20%, transparent); }
+.map-keys { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.map-keys code { background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; font-size: 11px; cursor: pointer; }
+.btn.midi-on { color: var(--good); }
+.btn.tiny.pfl { min-width: 40px; }
+.btn.tiny.pfl.on { background: var(--warn); color: #0d0e14; border-color: var(--warn); }
+.lib-row.selected { box-shadow: inset 3px 0 0 var(--warn); background: color-mix(in srgb, var(--warn) 8%, transparent); }

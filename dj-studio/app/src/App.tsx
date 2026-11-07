@@ -4,6 +4,8 @@ import { beatInfo } from './audio/beat';
 import { ensureBuffer, loadAllDemos, loadFile } from './audio/library';
 import { del, getAll, put, recordToTrack, saveTrackState, trackToRecord, type SoundRecord, type StateRecord, type TrackRecord } from './storage/db';
 import { encodeWav } from './studio/render';
+import { flx4Leds, flx4Map, keyOf, MidiDecoder, MidiHub, ACTIONS, type Binding } from './midi/midi';
+import { Settings } from './midi/Settings';
 import { coachTip, TransitionJudge, type Snapshot, type Tip, type TransitionResult } from './coach/coach';
 import { DeckPanel } from './components/DeckPanel';
 import { Library } from './components/Library';
@@ -16,6 +18,18 @@ import { SoundBank } from './studio/sounds';
 
 const engine = new AudioEngine();
 const bank = new SoundBank(engine.ctx);
+const hub = new MidiHub();
+function loadMidiMap(): Record<string, Binding> {
+  try {
+    const raw = storageGet('pista.midimap');
+    if (raw) return JSON.parse(raw);
+  } catch {
+    /* mapa salvo inválido */
+  }
+  return flx4Map();
+}
+const decoder = new MidiDecoder(loadMidiMap());
+const LEDS = flx4Leds();
 
 interface Toast {
   id: number;
@@ -40,6 +54,15 @@ export default function App() {
   const [studioTrack, setStudioTrack] = useState<Track | null>(null);
   const viewRef = useRef(view);
   viewRef.current = view;
+  const [settings, setSettings] = useState(false);
+  const [, setMidiVer] = useState(0);
+  const [learning, setLearning] = useState<string | null>(null);
+  const [lastMsg, setLastMsg] = useState('');
+  const [libSel, setLibSel] = useState<string | null>(null);
+  const syncFailRef = useRef<(id: DeckId) => void>(() => {});
+  const midiRef = useRef<(action: string, value: number) => void>(() => {});
+  const learnRef = useRef<string | null>(null);
+  learnRef.current = learning;
   const recRef = useRef<HTMLSpanElement>(null);
 
   const toast = useCallback((text: string, stars?: number) => {
@@ -186,6 +209,105 @@ export default function App() {
     };
   }, []);
 
+  // ---------- controladora ----------
+  const tracksRef = useRef(tracks);
+  tracksRef.current = tracks;
+  const libSelRef = useRef(libSel);
+  libSelRef.current = libSel;
+  midiRef.current = (action: string, v: number) => {
+    const [d, what] = action.includes('.') ? (action.split('.') as [DeckId, string]) : [null, action];
+    const deck = d ? engine.decks[d] : null;
+    const press = v > 0;
+    const eq = (x: number) => (x < 0.5 ? -26 * (1 - x / 0.5) : 6 * ((x - 0.5) / 0.5));
+    engine.resume();
+    if (deck && d) {
+      if (what === 'play') press && deck.toggle();
+      else if (what === 'cue') press && deck.cue();
+      else if (what === 'sync') {
+        if (press) deck.synced ? engine.unsync(d) : engine.sync(d) || syncFailRef.current(d);
+      } else if (what === 'pfl') press && engine.setPfl(d, !deck.pfl);
+      else if (what === 'load') {
+        if (!press) return;
+        const t = tracksRef.current.find((x) => x.id === libSelRef.current);
+        if (t) loadToDeck(d, t);
+        else toast('Gire o BROWSE da controladora para escolher uma música na biblioteca.');
+      } else if (what === 'tempo') {
+        deck.synced = false;
+        deck.setTempo(v * 2 - 1); // em cima = mais lento, como nos aparelhos Pioneer
+        engine.followTempo(d);
+      } else if (what === 'volume') engine.setCh('volume', d, v);
+      else if (what === 'trim') engine.setCh('gain', d, (v * 2 - 1) * 12);
+      else if (what === 'high' || what === 'mid' || what === 'low') engine.setCh(what, d, Math.abs(v - 0.5) < 0.02 ? 0 : eq(v));
+      else if (what === 'filter') engine.setCh('filter', d, Math.abs(v - 0.5) < 0.03 ? 0 : v * 2 - 1);
+      else if (what === 'jog') deck.jog(v);
+      else if (what === 'loop4') press && deck.autoLoop(4);
+      else if (what === 'loopExit') press && (deck.loop ? deck.exitLoop() : deck.autoLoop(4));
+      else if (what === 'loopHalf') press && deck.resizeLoop(0.5);
+      else if (what === 'loopDouble') press && deck.resizeLoop(2);
+      else if (what.startsWith('hotcue')) press && deck.hotCue(Number(what.slice(6)));
+      else if (what.startsWith('beatloop')) press && deck.autoLoop(Number(what.slice(8)));
+      else if (what.startsWith('jump')) press && deck.beatJump(Number(what.slice(4)));
+    } else if (what === 'xfader') engine.set('crossfader', Math.abs(v - 0.5) < 0.02 ? 0 : v * 2 - 1);
+    else if (what === 'headMix') engine.setHeadMix(v);
+    else if (what === 'browse') {
+      const list = tracksRef.current;
+      if (!list.length) return;
+      const i = Math.max(0, list.findIndex((x) => x.id === libSelRef.current));
+      const next = list[Math.max(0, Math.min(list.length - 1, i + Math.sign(v)))];
+      setLibSel(next.id);
+    } else if (what.startsWith('sampler')) {
+      if (!press) return;
+      const snd = bank.all()[Number(what.slice(7))];
+      if (snd) engine.playSample(snd.buffer);
+    }
+  };
+
+  useEffect(() => {
+    hub.onMessage = (data) => {
+      const raw = [...data];
+      if (raw[0] === 0xf0) return; // resposta do keep-alive
+      const learn = learnRef.current;
+      if (learn) {
+        const st = (raw[0] & 0xf0) === 0x80 ? 0x90 | (raw[0] & 0x0f) : raw[0];
+        if ((st & 0xf0) === 0x90 && raw[2] === 0) return; // espera o "apertar"
+        const def = ACTIONS.find((a) => a.id === learn)!;
+        const isCC = (st & 0xf0) === 0xb0;
+        const kind = def.kind === 'rel' ? 'rel' : def.kind === 'button' ? 'button' : isCC ? 'abs7' : 'button';
+        decoder.map = { ...decoder.map, [keyOf(st, raw[1])]: { action: learn, kind } };
+        storageSet('pista.midimap', JSON.stringify(decoder.map));
+        setLearning(null);
+        setMidiVer((x) => x + 1);
+        toast(`Aprendido: ${def.name}`);
+        return;
+      }
+      const ev = decoder.decode(raw);
+      if (ev) midiRef.current(ev.action, ev.value);
+      setLastMsg(raw.map((x) => x.toString(16).padStart(2, '0')).join(' ') + (ev ? ` → ${ACTIONS.find((a) => a.id === ev.action)?.name ?? ev.action}` : ' (sem função)'));
+    };
+    hub.onChange = () => setMidiVer((x) => x + 1);
+    // Para testes e diagnóstico: simula mensagens da controladora (ex.: __pistaMidi([0x90, 0x0b, 0x7f])).
+    (window as unknown as { __pistaMidi: (b: number[]) => void }).__pistaMidi = (b) => hub.onMessage(new Uint8Array(b));
+    // Se ela já deu permissão antes, conecta sozinho.
+    navigator.permissions
+      ?.query({ name: 'midi' as PermissionName })
+      .then((p) => p.state === 'granted' && hub.connect())
+      .catch(() => {});
+    // Luzes da controladora acompanham o app
+    const leds = () => {
+      if (!hub.status.connected.length) return;
+      for (const d of ['A', 'B'] as DeckId[]) {
+        const dk = engine.decks[d];
+        const L = (k: string, on: boolean) => LEDS[`${d}.${k}`] && hub.led(LEDS[`${d}.${k}`][0], LEDS[`${d}.${k}`][1], on);
+        L('play', dk.playing);
+        L('cue', !!dk.track && !dk.playing);
+        L('sync', dk.synced);
+        L('pfl', dk.pfl);
+        for (let i = 0; i < 8; i++) L(`hotcue${i}`, dk.track?.hotCues[i] != null);
+      }
+    };
+    return engine.subscribe(leds) as unknown as () => void;
+  }, [toast]);
+
   // Coach: dicas e avaliação das transições.
   const judge = useRef(new TransitionJudge());
   const coachClock = useRef(0);
@@ -243,6 +365,8 @@ export default function App() {
     },
     [toast],
   );
+
+  syncFailRef.current = syncFail;
 
   const toggleRec = useCallback(async () => {
     if (engine.recording) {
@@ -372,6 +496,9 @@ export default function App() {
             <button className={`btn rec ${engine.recording ? 'on' : ''}`} onClick={toggleRec} title="Gravar o set (R)">
               ● REC <span ref={recRef} />
             </button>
+            <button className={`btn ghost ${hub.status.connected.length ? 'midi-on' : ''}`} onClick={() => setSettings(true)} title="Som, fone e controladora">
+              {hub.status.connected.length ? '🎛 ' : ''}⚙
+            </button>
             <button className="btn ghost" onClick={() => setHelp(true)} title="Atalhos de teclado (?)">
               ⌨ ?
             </button>
@@ -442,7 +569,7 @@ export default function App() {
         </>
         )}
 
-        <Library engine={engine} tracks={tracks} pending={pending} onLoad={loadToDeck} onFiles={(f) => addFiles(f)} onEdit={openStudio} onRemove={removeTrack} editing={view === 'studio' ? studioTrack?.id : undefined} />
+        <Library engine={engine} tracks={tracks} pending={pending} onLoad={loadToDeck} onFiles={(f) => addFiles(f)} onEdit={openStudio} onRemove={removeTrack} selectedId={libSel ?? undefined} onSelect={setLibSel} editing={view === 'studio' ? studioTrack?.id : undefined} />
 
         <div className="toasts" aria-live="polite">
           {toasts.map((t) => (
@@ -492,6 +619,35 @@ export default function App() {
               </button>
             </div>
           </div>
+        )}
+
+        {settings && (
+          <Settings
+            engine={engine}
+            midi={{ supported: hub.status.supported, connected: hub.status.connected, isFlx4: hub.isFlx4, map: decoder.map, learning, lastMsg }}
+            onConnect={async () => {
+              const ok = await hub.connect();
+              if (!ok) toast('Não consegui acessar a controladora. Verifique o cabo USB e permita o acesso MIDI no navegador.');
+              setMidiVer((x) => x + 1);
+            }}
+            onLearn={setLearning}
+            onResetMap={() => {
+              decoder.map = flx4Map();
+              storageSet('pista.midimap', JSON.stringify(decoder.map));
+              setMidiVer((x) => x + 1);
+            }}
+            onClearBinding={(k) => {
+              const m = { ...decoder.map };
+              delete m[k];
+              decoder.map = m;
+              storageSet('pista.midimap', JSON.stringify(m));
+              setMidiVer((x) => x + 1);
+            }}
+            onClose={() => {
+              setSettings(false);
+              setLearning(null);
+            }}
+          />
         )}
 
         {welcome && (

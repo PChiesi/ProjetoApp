@@ -53,7 +53,10 @@ class Channel {
   readonly meter: AnalyserNode;
   private meterBuf = new Float32Array(1024);
 
-  constructor(ctx: AudioContext, out: AudioNode) {
+  /** Envio para o fone (pré-escuta): depois do EQ/filtro, antes do volume. */
+  readonly cueSend: GainNode;
+
+  constructor(ctx: AudioContext, out: AudioNode, cueBus: AudioNode) {
     this.input = ctx.createGain();
     this.low = ctx.createBiquadFilter();
     this.low.type = 'lowshelf';
@@ -74,6 +77,9 @@ class Channel {
     this.meter = ctx.createAnalyser();
     this.meter.fftSize = 1024;
     this.input.connect(this.low).connect(this.mid).connect(this.high).connect(this.filter).connect(this.fader);
+    this.cueSend = ctx.createGain();
+    this.cueSend.gain.value = 0;
+    this.filter.connect(this.cueSend).connect(cueBus);
     this.fader.connect(this.meter);
     this.fader.connect(this.xfade).connect(out);
   }
@@ -99,6 +105,9 @@ export class Deck {
   quantize = true;
   /** Key lock: o tom não muda quando o BPM muda. */
   keyLock = true;
+  /** Pré-escuta no fone. */
+  pfl = false;
+  private bendTimer = 0;
   /** Pitch shifter do key lock (fica entre a música e o canal). */
   shifter: AudioWorkletNode | null = null;
   private offset = 0; // posição (s da música) no último "âncora"
@@ -331,6 +340,24 @@ export class Deck {
     this.updatePitch();
   }
 
+  /** Prato da controladora: girando com a música tocando acelera/freia; parada, arrasta a agulha. */
+  jog(delta: number) {
+    if (!this.track) return;
+    if (!this.playing) {
+      this.seek(this.position() + delta * 0.006);
+      return;
+    }
+    if (this.playing) {
+      this.offset = this.position();
+      this.anchor = this.ctx.currentTime;
+    }
+    this.nudgeFactor = 1 + Math.max(-0.25, Math.min(0.25, delta * 0.012));
+    if (this.source) this.source.playbackRate.setTargetAtTime(this.playbackRate, this.ctx.currentTime, 0.005);
+    this.updatePitch();
+    clearTimeout(this.bendTimer);
+    this.bendTimer = window.setTimeout(() => this.nudge(0), 70);
+  }
+
   setKeyLock(on: boolean) {
     this.keyLock = on;
     this.updatePitch();
@@ -449,6 +476,19 @@ export class AudioEngine {
   private recDest: MediaStreamAudioDestinationNode;
   /** Saída do Estúdio (passa pelo limitador e entra na gravação). */
   readonly studioOut: GainNode;
+  /** Sampler (vinheta, buzina…) direto no som principal. */
+  readonly samplerOut: GainNode;
+  // ---- fone ----
+  private cueBus: GainNode;
+  private hpCue: GainNode;
+  private hpMaster: GainNode;
+  private hpBus: GainNode;
+  private routeNodes: AudioNode[] = [];
+  /** normal = só caixa · split = fone no lado direito · quad = placa de 4 canais (1-2 caixa, 3-4 fone) */
+  outputMode: 'normal' | 'split' | 'quad' = 'normal';
+  /** Mistura do fone: 0 = só pré-escuta, 1 = só o que o público ouve. */
+  headMix = 0.25;
+  outputDeviceId = '';
   private recorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
   recordingSince: number | null = null;
@@ -475,8 +515,16 @@ export class AudioEngine {
     this.bus.connect(this.busMeter);
     this.bus.connect(this.limiter).connect(this.masterGain);
     this.masterGain.connect(this.masterMeter);
-    this.masterGain.connect(this.ctx.destination);
     this.masterGain.connect(this.recDest);
+    this.cueBus = this.ctx.createGain();
+    this.hpCue = this.ctx.createGain();
+    this.hpMaster = this.ctx.createGain();
+    this.hpBus = this.ctx.createGain();
+    this.cueBus.connect(this.hpCue).connect(this.hpBus);
+    this.masterGain.connect(this.hpMaster).connect(this.hpBus);
+    this.samplerOut = this.ctx.createGain();
+    this.samplerOut.connect(this.bus);
+    this.route();
 
     this.studioOut = this.ctx.createGain();
     this.studioOut.connect(this.bus);
@@ -486,8 +534,8 @@ export class AudioEngine {
       this.emit();
     };
     this.decks = {
-      A: new Deck('A', this.ctx, new Channel(this.ctx, this.bus), notify),
-      B: new Deck('B', this.ctx, new Channel(this.ctx, this.bus), notify),
+      A: new Deck('A', this.ctx, new Channel(this.ctx, this.bus, this.cueBus), notify),
+      B: new Deck('B', this.ctx, new Channel(this.ctx, this.bus, this.cueBus), notify),
     };
     this.applyAll();
     loadKeyLock(this.ctx).then((ok) => {
@@ -572,6 +620,119 @@ export class AudioEngine {
       s(ch.xfade.gain, this.xfGain(id));
     }
     this.masterGain && s(this.masterGain.gain, this.mix.master);
+  }
+
+  // ---- fone e saídas ----
+  get quadAvailable() {
+    return this.ctx.destination.maxChannelCount >= 4;
+  }
+
+  private route() {
+    for (const n of this.routeNodes) n.disconnect();
+    this.routeNodes = [];
+    try {
+      this.masterGain.disconnect(this.ctx.destination);
+    } catch {
+      /* não estava ligado */
+    }
+    this.hpBus.disconnect();
+    const ctx = this.ctx;
+    const dest = ctx.destination;
+    let mode = this.outputMode;
+    if (mode === 'quad' && !this.quadAvailable) mode = 'split';
+    if (mode === 'normal') {
+      dest.channelCount = 2;
+      dest.channelInterpretation = 'speakers';
+      this.masterGain.connect(dest);
+    } else if (mode === 'split') {
+      // Fone comum: esquerda = o que o público ouve, direita = pré-escuta (como nos softwares de DJ)
+      dest.channelCount = 2;
+      dest.channelInterpretation = 'speakers';
+      const mono = (src: AudioNode) => {
+        const g = ctx.createGain();
+        g.channelCount = 1;
+        g.channelCountMode = 'explicit';
+        src.connect(g);
+        this.routeNodes.push(g);
+        return g;
+      };
+      const merger = ctx.createChannelMerger(2);
+      mono(this.masterGain).connect(merger, 0, 0);
+      mono(this.hpBus).connect(merger, 0, 1);
+      merger.connect(dest);
+      this.routeNodes.push(merger);
+    } else {
+      dest.channelCount = 4;
+      dest.channelCountMode = 'explicit';
+      dest.channelInterpretation = 'discrete';
+      const merger = ctx.createChannelMerger(4);
+      const sm = ctx.createChannelSplitter(2);
+      const sh = ctx.createChannelSplitter(2);
+      this.masterGain.connect(sm);
+      this.hpBus.connect(sh);
+      sm.connect(merger, 0, 0);
+      sm.connect(merger, 1, 1);
+      sh.connect(merger, 0, 2);
+      sh.connect(merger, 1, 3);
+      merger.connect(dest);
+      this.routeNodes.push(sm, sh, merger);
+    }
+    this.applyHeadMix();
+  }
+
+  setOutputMode(mode: 'normal' | 'split' | 'quad') {
+    this.outputMode = mode;
+    this.route();
+    this.emit();
+  }
+
+  private applyHeadMix() {
+    const t = this.ctx.currentTime;
+    const anyPfl = this.decks ? this.decks.A.pfl || this.decks.B.pfl : false;
+    // Sem nenhum deck no fone, o fone toca o master (para não ficar mudo).
+    this.hpCue.gain.setTargetAtTime(anyPfl ? Math.cos((this.headMix * Math.PI) / 2) : 0, t, 0.01);
+    this.hpMaster.gain.setTargetAtTime(anyPfl ? Math.sin((this.headMix * Math.PI) / 2) : 1, t, 0.01);
+  }
+
+  setHeadMix(v: number) {
+    this.headMix = Math.max(0, Math.min(1, v));
+    this.applyHeadMix();
+    this.emit();
+  }
+
+  setPfl(id: DeckId, on: boolean) {
+    const d = this.decks[id];
+    d.pfl = on;
+    d.channel.cueSend.gain.setTargetAtTime(on ? 1 : 0, this.ctx.currentTime, 0.01);
+    this.applyHeadMix();
+    this.emit();
+  }
+
+  /** Escolhe a placa de som (ex.: a da controladora). */
+  async setOutputDevice(id: string): Promise<boolean> {
+    const c = this.ctx as AudioContext & { setSinkId?: (id: string) => Promise<void> };
+    if (!c.setSinkId) return false;
+    try {
+      await c.setSinkId(id);
+      this.outputDeviceId = id;
+      if (this.outputMode !== 'normal') this.setOutputMode(this.quadAvailable ? 'quad' : 'split');
+      this.emit();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  get canChooseDevice() {
+    return 'setSinkId' in this.ctx;
+  }
+
+  /** Toca um som do sampler no tempo agora. */
+  playSample(buffer: AudioBuffer) {
+    const s = this.ctx.createBufferSource();
+    s.buffer = buffer;
+    s.connect(this.samplerOut);
+    s.start();
   }
 
   setAutoGain(on: boolean) {

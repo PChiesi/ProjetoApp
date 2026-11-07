@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AudioEngine, DeckId, Track } from '../audio/engine';
 import { camelotMatch } from '../audio/beat';
 import { AUDIO_ACCEPT } from '../audio/library';
@@ -12,6 +12,8 @@ interface Props {
   onFiles: (files: FileList) => void;
   onEdit: (track: Track) => void;
   onRemove: (track: Track) => void;
+  selectedId?: string;
+  onSelect?: (id: string) => void;
   editing?: string;
 }
 
@@ -26,7 +28,11 @@ function fits(t: Track, ref: Track | null): boolean {
   return near && key !== 'conflito';
 }
 
-export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, onRemove, editing }: Props) {
+export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, onRemove, editing, selectedId, onSelect }: Props) {
+  // Linha escolhida pelo BROWSE da controladora fica visível
+  useEffect(() => {
+    if (selectedId) document.querySelector(`[data-track="${CSS.escape(selectedId)}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [selectedId]);
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<Filter>('todas');
   const input = useRef<HTMLInputElement>(null);
@@ -103,7 +109,9 @@ export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, onRe
           return (
             <div
               key={t.id}
-              className={`lib-row ${editing === t.id ? 'editing' : ''}`}
+              className={`lib-row ${editing === t.id ? 'editing' : ''} ${selectedId === t.id ? 'selected' : ''}`}
+              data-track={t.id}
+              onClick={() => onSelect?.(t.id)}
               role="row"
               draggable
               onDragStart={(e) => {

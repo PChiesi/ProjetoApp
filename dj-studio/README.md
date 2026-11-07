@@ -9,6 +9,10 @@ Plano completo: [`PLANO.md`](PLANO.md).
 
 Atalhos: aperte <kbd>?</kbd> dentro do app.
 
+**Controladora (DDJ-FLX4):** ligue no USB, clique em ⚙ → "Conectar controladora" e permita o acesso. Para ouvir a pré-escuta no fone da controladora, escolha a placa dela em ⚙ e o modo "Controladora (4 canais)". Algum botão fazendo a coisa errada? ⚙ → "Ver / trocar controles" → "Aprender".
+
+**Tudo fica salvo** no próprio navegador (músicas, edições, vinhetas, hot cues). Use sempre o mesmo navegador e o mesmo arquivo `Pista.html`.
+
 **Estúdio:** clique em ✎ ao lado de uma música (ou na aba "✂ Estúdio") para cortar, repetir e estender trechos, fazer fades e salvar a sua versão — ela volta para a biblioteca pronta para tocar.
 
 ## Para desenvolver

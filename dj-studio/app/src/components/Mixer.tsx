@@ -2,7 +2,8 @@ import { useRef } from 'react';
 import type { AudioEngine, DeckId } from '../audio/engine';
 import { useFrame } from '../hooks';
 import { Knob } from './Knob';
-import { Level } from './Level';
+import { Level, LevelContext } from './Level';
+import { useContext } from 'react';
 
 const db = (v: number) => (v <= -25.5 ? 'corte' : `${v > 0 ? '+' : ''}${v.toFixed(0)} dB`);
 const filt = (v: number) => (Math.abs(v) < 0.03 ? 'desligado' : v < 0 ? `graves ${Math.round(-v * 100)}%` : `agudos ${Math.round(v * 100)}%`);
@@ -24,8 +25,20 @@ function Channel({ engine, id }: { engine: AudioEngine; id: DeckId }) {
         <Knob label="MÉDIO" value={m.mid[id]} min={-26} max={6} center={0} onChange={(v) => set('mid', v)} format={db} color={color} size={40} />
       </Level>
       <Knob label="GRAVE" coach="low" value={m.low[id]} min={-26} max={6} center={0} onChange={(v) => set('low', v)} format={db} color={color} size={52} title="Grave: gire para a esquerda para tirar o bumbo e o baixo" />
+      <PflButton engine={engine} id={id} />
       <Knob label="FILTRO" value={m.filter[id]} min={-1} max={1} center={0} onChange={(v) => set('filter', v)} format={filt} color={color} size={52} title="Filtro: esquerda abafa, direita deixa só os agudos" />
     </div>
+  );
+}
+
+function PflButton({ engine, id }: { engine: AudioEngine; id: DeckId }) {
+  const level = useContext(LevelContext);
+  if (level < 2 && engine.outputMode === 'normal') return null;
+  const on = engine.decks[id].pfl;
+  return (
+    <button className={`btn tiny pfl ${on ? 'on' : ''}`} aria-pressed={on} onClick={() => engine.setPfl(id, !on)} title="Ouvir este deck no fone (pré-escuta)">
+      🎧
+    </button>
   );
 }
 
