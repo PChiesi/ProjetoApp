@@ -63,3 +63,34 @@ export function SetReportModal({ report, onClose }: { report: SetReport; onClose
     </div>
   );
 }
+
+/** Lista dos sets gravados (relatórios salvos). */
+export function SetsHistory({ sets, onOpen, onClose }: { sets: SetReport[]; onOpen: (r: SetReport) => void; onClose: () => void }) {
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal report" role="dialog" aria-label="Meus sets" onClick={(e) => e.stopPropagation()}>
+        <h2>📊 Meus sets</h2>
+        {sets.length === 0 ? (
+          <p>Nenhum set gravado ainda. Aperte ● REC, toque e pare a gravação para ver o relatório aqui.</p>
+        ) : (
+          <>
+            <p className="muted">Sua evolução: compare a nota média dos sets ao longo do tempo.</p>
+            <div className="sets-list">
+              {sets.map((r, i) => (
+                <button key={i} className="set-row" onClick={() => onOpen(r)}>
+                  <span>{new Date(r.date).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                  <span>{fmtTime(r.duration)}</span>
+                  <span>{r.tracks.length} músicas</span>
+                  <span className="gold">{r.avgStars ? `${r.avgStars.toFixed(1)} ★` : '—'}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+        <button className="btn" onClick={onClose}>
+          Fechar
+        </button>
+      </div>
+    </div>
+  );
+}

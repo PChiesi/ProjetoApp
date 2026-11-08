@@ -3,7 +3,7 @@ import type { AudioEngine, DeckId, Track } from '../audio/engine';
 import { camelotMatch } from '../audio/beat';
 import { AUDIO_ACCEPT } from '../audio/library';
 import { energyOf, suggestNext, type Suggestion } from '../audio/suggest';
-import { fmtTime } from '../hooks';
+import { fmtTime, storageGet, storageSet } from '../hooks';
 
 interface Props {
   engine: AudioEngine;
@@ -16,9 +16,21 @@ interface Props {
   selectedId?: string;
   onSelect?: (id: string) => void;
   editing?: string;
+  onShowSets?: () => void;
 }
 
-type Filter = 'sugestoes' | 'todas' | 'A' | 'B';
+/** 'sugestoes' | 'todas' | 'A' | 'B' | 'tocadas' | 'pl:<nome>' */
+type Filter = string;
+type Playlists = Record<string, string[]>;
+
+function loadPlaylists(): Playlists {
+  try {
+    const p = JSON.parse(storageGet('pista.playlists') ?? '{}');
+    return p && typeof p === 'object' ? p : {};
+  } catch {
+    return {};
+  }
+}
 
 const energyCache = new WeakMap<Track, number>();
 const energy = (t: Track) => {
@@ -37,7 +49,23 @@ function fits(t: Track, ref: Track | null): boolean {
   return near && key !== 'conflito';
 }
 
-export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, onRemove, editing, selectedId, onSelect }: Props) {
+export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, onRemove, editing, selectedId, onSelect, onShowSets }: Props) {
+  const [playlists, setPlaylists] = useState<Playlists>(loadPlaylists);
+  const [plMenu, setPlMenu] = useState<string | null>(null);
+  const savePl = (p: Playlists) => {
+    setPlaylists(p);
+    storageSet('pista.playlists', JSON.stringify(p));
+  };
+  const newPlaylist = () => {
+    const name = window.prompt('Nome da playlist (ex.: Baile de sexta, Aquecimento, Pop anos 2000):')?.trim();
+    if (!name) return;
+    if (!playlists[name]) savePl({ ...playlists, [name]: [] });
+    setFilter(`pl:${name}`);
+  };
+  const toggleInPl = (name: string, id: string) => {
+    const cur = playlists[name] ?? [];
+    savePl({ ...playlists, [name]: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] });
+  };
   // Linha escolhida pelo BROWSE da controladora fica visível
   useEffect(() => {
     if (selectedId) document.querySelector(`[data-track="${CSS.escape(selectedId)}"]`)?.scrollIntoView({ block: 'nearest' });
@@ -71,9 +99,12 @@ export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, onRe
       if (s && !`${t.title} ${t.artist} ${t.genre ?? ''}`.toLowerCase().includes(s)) return false;
       if (filter === 'A') return fits(t, refA);
       if (filter === 'B') return fits(t, refB);
+      if (filter === 'tocadas') return engine.played.has(t.id);
+      if (filter.startsWith('pl:')) return (playlists[filter.slice(3)] ?? []).includes(t.id);
       return true;
     });
-  }, [tracks, q, filter, refA, refB, suggestions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracks, q, filter, refA, refB, suggestions, playlists, engine.played.size]);
 
   return (
     <section className="library" aria-label="Biblioteca">
@@ -94,6 +125,11 @@ export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, onRe
             </button>
           ))}
         </div>
+        {onShowSets && (
+          <button className="btn ghost" onClick={onShowSets} title="Relatórios dos sets que você gravou">
+            📊 Meus sets
+          </button>
+        )}
         <button className="btn add" onClick={() => input.current?.click()}>
           + Adicionar músicas
         </button>
@@ -108,6 +144,34 @@ export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, onRe
             e.target.value = '';
           }}
         />
+      </div>
+      <div className="chips pl-chips" role="tablist" aria-label="Playlists">
+        <button role="tab" aria-selected={filter === 'tocadas'} className={`chip ${filter === 'tocadas' ? 'on' : ''}`} onClick={() => setFilter('tocadas')}>
+          🕘 Tocadas hoje
+        </button>
+        {Object.keys(playlists).map((name) => (
+          <button key={name} role="tab" aria-selected={filter === `pl:${name}`} className={`chip ${filter === `pl:${name}` ? 'on' : ''}`} onClick={() => setFilter(`pl:${name}`)}>
+            📁 {name} <small>{playlists[name].length}</small>
+          </button>
+        ))}
+        <button className="chip" onClick={newPlaylist}>
+          + Playlist
+        </button>
+        {filter.startsWith('pl:') && (
+          <button
+            className="chip danger"
+            onClick={() => {
+              const n = filter.slice(3);
+              if (!window.confirm(`Apagar a playlist "${n}"? (as músicas continuam na biblioteca)`)) return;
+              const p = { ...playlists };
+              delete p[n];
+              savePl(p);
+              setFilter('todas');
+            }}
+          >
+            Apagar playlist
+          </button>
+        )}
       </div>
       <div className="lib-table" role="table">
         <div className="lib-row lib-head" role="row">
@@ -174,6 +238,22 @@ export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, onRe
               <span className={`key-cell ${kA === 'ok' ? 'ok' : kA === 'conflito' ? 'bad' : kA === 'risco' ? 'risk' : ''}`}>{t.key ?? '—'}</span>
               <span className="num dur-cell">
                 {fmtTime(t.duration)}
+                <span className="pl-wrap">
+                  <button className="row-x pl-btn" onClick={(e) => { e.stopPropagation(); setPlMenu(plMenu === t.id ? null : t.id); }} aria-label={`Playlists de ${t.title}`} title="Adicionar a uma playlist">
+                    📁
+                  </button>
+                  {plMenu === t.id && (
+                    <span className="pl-menu" role="menu" onMouseLeave={() => setPlMenu(null)}>
+                      {Object.keys(playlists).length === 0 && <span className="muted">Nenhuma playlist ainda</span>}
+                      {Object.keys(playlists).map((name) => (
+                        <label key={name}>
+                          <input type="checkbox" checked={(playlists[name] ?? []).includes(t.id)} onChange={() => toggleInPl(name, t.id)} /> {name}
+                        </label>
+                      ))}
+                      <button onClick={newPlaylist}>+ Nova playlist</button>
+                    </span>
+                  )}
+                </span>
                 {!t.demo && (
                   <button className="row-x" onClick={() => onRemove(t)} aria-label={`Remover ${t.title} da biblioteca`} title="Remover da biblioteca">
                     ✕
@@ -189,6 +269,10 @@ export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, onRe
               ? 'Nenhuma música encontrada.'
               : filter === 'sugestoes'
                 ? 'Toque uma música para ver as melhores opções para entrar depois dela.'
+                : filter === 'tocadas'
+                  ? 'Nenhuma música tocou ainda nesta sessão.'
+                  : filter.startsWith('pl:')
+                    ? 'Playlist vazia. Use o 📁 ao lado de uma música para adicionar.'
                 : `Carregue uma música no deck ${filter} para ver as que combinam.`}
           </p>
         )}

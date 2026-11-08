@@ -18,6 +18,11 @@ export function Pads({ deck }: { deck: Deck }) {
         <button role="tab" aria-selected={mode === 'loop'} className={`chip ${mode === 'loop' ? 'on' : ''}`} onClick={() => setMode('loop')}>
           LOOP {deck.loop && <span className="loop-on">● {loopLabel(deck.loop.beats)}</span>}
         </button>
+        {mode === 'cue' && (
+          <button className="chip auto-cues" disabled={!t} onClick={() => deck.autoCues()} title="Marca hot cues no começo de cada parte da música (intro, drop, breakdown, outro)">
+            ✨ Auto
+          </button>
+        )}
         <span className="pad-hint">
           {mode === 'cue' ? 'Vazio: marca · Marcado: pula · Botão direito: apaga' : 'Toque de novo para sair do loop'}
         </span>

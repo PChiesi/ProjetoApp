@@ -22,7 +22,7 @@ import { TransitionRunner, type TransitionId } from './coach/transitions';
 import { Automix } from './coach/automix';
 import { AutoBar } from './components/AutoBar';
 import { SetRecorder, type SetReport } from './coach/report';
-import { SetReportModal } from './components/SetReportModal';
+import { SetReportModal, SetsHistory } from './components/SetReportModal';
 import { SoundBank } from './studio/sounds';
 
 const engine = new AudioEngine();
@@ -73,6 +73,7 @@ export default function App() {
   // ---- relatório pós-set ----
   const setRec = useRef(new SetRecorder());
   const [report, setReport] = useState<SetReport | null>(null);
+  const [setsOpen, setSetsOpen] = useState(false);
   // ---- transições prontas e automix ----
   const [narration, setNarration] = useState<string | null>(null);
   const [runningTr, setRunningTr] = useState<string | null>(null);
@@ -738,7 +739,7 @@ export default function App() {
         </>
         )}
 
-        <Library engine={engine} tracks={tracks} pending={pending} onLoad={loadToDeck} onFiles={(f) => addFiles(f)} onEdit={openStudio} onRemove={removeTrack} selectedId={libSel ?? undefined} onSelect={setLibSel} editing={view === 'studio' ? studioTrack?.id : undefined} />
+        <Library engine={engine} tracks={tracks} pending={pending} onLoad={loadToDeck} onFiles={(f) => addFiles(f)} onEdit={openStudio} onRemove={removeTrack} onShowSets={() => setSetsOpen(true)} selectedId={libSel ?? undefined} onSelect={setLibSel} editing={view === 'studio' ? studioTrack?.id : undefined} />
 
         <div className="toasts" aria-live="polite">
           {toasts.map((t) => (
@@ -791,6 +792,22 @@ export default function App() {
           </div>
         )}
 
+        {setsOpen && (
+          <SetsHistory
+            sets={(() => {
+              try {
+                return JSON.parse(storageGet('pista.sets') ?? '[]') as SetReport[];
+              } catch {
+                return [];
+              }
+            })()}
+            onOpen={(r) => {
+              setSetsOpen(false);
+              setReport(r);
+            }}
+            onClose={() => setSetsOpen(false)}
+          />
+        )}
         {report && <SetReportModal report={report} onClose={() => setReport(null)} />}
         {lessonsOpen && <LessonsModal progress={progress} onStart={startLesson} onClose={() => setLessonsOpen(false)} />}
         {lesson && (

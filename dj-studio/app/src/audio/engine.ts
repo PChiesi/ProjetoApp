@@ -242,6 +242,23 @@ export class Deck {
     this.seek(target);
   }
 
+  /** Marca hot cues nas partes da música (intro, partes, breakdown, outro). Retorna quantos marcou. */
+  autoCues(): number {
+    const t = this.track;
+    if (!t) return 0;
+    const pts: number[] = [t.firstBeat];
+    let last = '';
+    for (const s of t.sections) {
+      // Marca quando o tipo de parte muda (começo do "drop", do breakdown, do outro…)
+      if (s.kind !== last && s.start > t.firstBeat + 0.5) pts.push(s.start);
+      last = s.kind;
+    }
+    const uniq = [...new Set(pts.map((x) => Math.round(x * 1000) / 1000))].slice(0, 8);
+    t.hotCues = Array.from({ length: 8 }, (_, i) => uniq[i] ?? null);
+    this.changed();
+    return uniq.length;
+  }
+
   clearHotCue(i: number) {
     if (!this.track) return;
     this.track.hotCues[i] = null;

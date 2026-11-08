@@ -289,10 +289,15 @@ Acrescentam-se à trilha da seção 5: **"Corte seco no funk"**, **"Subindo a en
 - [x] **15 lições guiadas** com verificação automática de cada passo, destaque do controle e progresso salvo.
 - [x] **✨ Próxima música**: sugestões por BPM (inclui dobro/metade), tom, gênero e energia, com o motivo de cada uma.
 
+- [x] **Transições prontas que explicam**: Suave (troca de graves, 16 compassos), Filtro, Eco e Corte no 1 — entram na virada da frase e narram cada movimento.
+- [x] **🤖 Automix**: escolhe a próxima pela sugestão, carrega, sincroniza, escolhe o tipo de transição (corte se o BPM for longe, eco se o tom brigar) e explica o porquê.
+- [x] **Relatório pós-set** ao parar a gravação (músicas com horário, nota de cada transição, dica principal) e **📊 Meus sets** com o histórico.
+- [x] **Playlists** (📁), filtro **Tocadas hoje** e **✨ Auto** hot cues pelas partes da música.
+
 ### Próximos
 1. Testar com ela: abrir o `Pista.html`, deixar ela tocar sem explicar nada, anotar onde travou.
 2. Testar com a DDJ-FLX4 de verdade (mapa baseado no Mixxx; qualquer controle errado se corrige em ⚙ → "Aprender").
-3. Seguir o backlog da **seção 12**: P2 — stems (16), transições prontas (17), cue automático (19), playlists/histórico (20), Automix que explica (21) e relatório pós-set (22).
+3. Seguir o backlog: **stems** (16 — separar vocal/batida com modelo de IA no app de desktop), modo **Ensaiar** no fone (23) e o P3 (Estúdio multipista / "Versão funk", batidas prontas, grid dinâmico).
 
 ---
 
@@ -391,12 +396,12 @@ Esforço: P = pequeno (dias), M = médio (1–2 semanas), G = grande (3+ semanas
 | # | Funcionalidade | Inspiração | Esforço |
 |---|---|---|---|
 | 16 | **Stems** (vocal / batida / baixo / melodia) nos decks e no Estúdio | Todos menos Mixxx | G |
-| 17 | **Transições prontas** com explicação | djay Crossfader Fusion | M |
+| 17 | **Transições prontas** com explicação ✅ | djay Crossfader Fusion | M |
 | 18 | **Sugestão da próxima música** (BPM, tom, energia, gênero) ✅ | rekordbox Related Tracks | P |
-| 19 | **Cue automático** (intro, refrão, breakdown, outro) | rekordbox Intelligent Cue | M |
-| 20 | **Playlists, histórico de sets** e tags de energia | Todos | P |
-| 21 | **Automix que explica** | djay, VirtualDJ, Mixxx | M |
-| 22 | **Relatório pós-set** (seção 5.3) | — (diferencial) | M |
+| 19 | **Cue automático** (intro, refrão, breakdown, outro) ✅ | rekordbox Intelligent Cue | M |
+| 20 | **Playlists, histórico de sets** e tags de energia ✅ (tags de energia pendentes) | Todos | P |
+| 21 | **Automix que explica** ✅ | djay, VirtualDJ, Mixxx | M |
+| 22 | **Relatório pós-set** (seção 5.3) ✅ | — (diferencial) | M |
 | 23 | **Ensaiar** no fone (sandbox) | VirtualDJ | M |
 
 ### P3 — Remix e performance avançada

@@ -419,3 +419,19 @@ kbd { background: var(--panel-2); border: 1px solid var(--line); border-bottom-w
 .rt-time { color: var(--muted); font-variant-numeric: tabular-nums; }
 .rt-stars { color: var(--warn); letter-spacing: 1px; }
 @media (max-width: 720px) { .report-stats { grid-template-columns: repeat(2, 1fr); } }
+
+/* ---------- playlists ---------- */
+.pl-chips { flex-wrap: wrap; margin-bottom: 6px; }
+.pl-chips .chip small { color: var(--muted); margin-left: 2px; }
+.chip.danger { color: var(--bad); }
+.pl-wrap { position: relative; }
+.pl-btn { opacity: 0.35; }
+.pl-menu { position: absolute; right: 0; bottom: 100%; z-index: 20; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px; display: flex; flex-direction: column; gap: 2px; min-width: 190px; box-shadow: 0 10px 30px rgba(0,0,0,.5); font-variant-numeric: normal; }
+.pl-menu label { display: flex; gap: 6px; align-items: center; padding: 5px 6px; border-radius: 6px; cursor: pointer; font-size: 13px; white-space: nowrap; }
+.pl-menu label:hover { background: var(--panel); }
+.pl-menu button { background: none; border: none; text-align: left; padding: 5px 6px; color: var(--accent); cursor: pointer; font-weight: 700; font-size: 13px; }
+
+.sets-list { display: flex; flex-direction: column; gap: 4px; }
+.set-row { display: grid; grid-template-columns: 1.4fr 0.8fr 1fr 0.7fr; gap: 8px; text-align: left; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.set-row:hover { border-color: var(--accent); }
+.chip.auto-cues { color: var(--warn); }
