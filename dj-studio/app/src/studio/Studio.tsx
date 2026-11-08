@@ -34,6 +34,13 @@ import { encodeWav, renderProject, StudioPlayer, type RenderOpts } from './rende
 import { trimAndNormalize, type SoundAsset, type SoundBank } from './sounds';
 import { VinhetaRecorder } from './VinhetaRecorder';
 import { AUDIO_ACCEPT } from '../audio/library';
+import { hasStems, loadStems } from '../audio/stems';
+import { STEM_IDS, type StemId } from '../audio/engine';
+
+type PartMode = 'tudo' | 'vocal' | 'instrumental' | 'batida';
+const PART_LABEL: Record<PartMode, string> = { tudo: 'Música inteira', vocal: 'Só vocal (acapella)', instrumental: 'Instrumental (sem voz)', batida: 'Só batida + baixo' };
+const PART_STEMS: Record<Exclude<PartMode, 'tudo'>, StemId[]> = { vocal: ['vocals'], instrumental: ['drums', 'bass', 'other'], batida: ['drums', 'bass'] };
+const PART_SUFFIX: Record<PartMode, string> = { tudo: 'Edit', vocal: 'Acapella', instrumental: 'Instrumental', batida: 'Batida' };
 
 interface Props {
   engine: AudioEngine;
@@ -82,6 +89,36 @@ export function Studio({ engine, track, onExit, onSaved, toast, bank, onUserSoun
   const itemDrag = useRef<{ id: number; x: number; at: number; moved: boolean } | null>(null);
   const [dragAt, setDragAt] = useState<{ id: number; at: number } | null>(null);
   const opts: RenderOpts = { grid, sound: (id) => bank.get(id)?.buffer };
+  // Parte da música usada no Estúdio (precisa dos stems separados nos decks)
+  const [part, setPart] = useState<PartMode>('tudo');
+  const [partBuf, setPartBuf] = useState<AudioBuffer | null>(null);
+  const [stemsAvail, setStemsAvail] = useState(false);
+  useEffect(() => {
+    setPart('tudo');
+    setPartBuf(null);
+    hasStems(track.id).then(setStemsAvail);
+  }, [track]);
+  useEffect(() => {
+    if (part === 'tudo') return setPartBuf(null);
+    let alive = true;
+    loadStems(engine.ctx, track.id).then((set) => {
+      if (!alive || !set) return;
+      const keep = PART_STEMS[part];
+      const ref = set[STEM_IDS[0]];
+      const out = engine.ctx.createBuffer(2, ref.length, ref.sampleRate);
+      for (const k of keep)
+        for (let c = 0; c < 2; c++) {
+          const src = set[k].getChannelData(c);
+          const dst = out.getChannelData(c);
+          for (let i = 0; i < dst.length; i++) dst[i] += src[i];
+        }
+      setPartBuf(out);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [part, track, engine]);
+  const audio = (part !== 'tudo' && partBuf) || track.buffer!;
 
   const total = projectLength(project);
 
@@ -113,10 +150,10 @@ export function Studio({ engine, track, onExit, onSaved, toast, bank, onUserSoun
         decks.forEach((d) => d.pause());
         toast('Pausei os decks para você ouvir o Estúdio.');
       }
-      player.play(track.buffer!, p, Math.min(from, projectLength(p) - 0.05), opts, () => setPlaying(false));
+      player.play(audio, p, Math.min(from, projectLength(p) - 0.05), opts, () => setPlaying(false));
       setPlaying(true);
     },
-    [engine, player, project, toast, track.buffer],
+    [engine, player, project, toast, audio],
   );
 
   const commit = useCallback(
@@ -216,8 +253,8 @@ export function Studio({ engine, track, onExit, onSaved, toast, bank, onUserSoun
     stop();
     setBusy(true);
     try {
-      const buf = await renderProject(track.buffer!, project, opts);
-      const title = `${track.title.replace(/ \(Edit.*\)$/, '')} (Edit)`;
+      const buf = await renderProject(audio, project, opts);
+      const title = `${track.title.replace(/ \((Edit|Acapella|Instrumental|Batida).*\)$/, '')} (${PART_SUFFIX[part]})`;
       if (mode === 'download') {
         const where = await saveFile(encodeWav(buf), `${title}.wav`, { label: 'Áudio WAV', ext: 'wav' });
         if (where) toast(where === 'Downloads' ? 'WAV salvo na pasta Downloads.' : 'WAV salvo!');
@@ -516,6 +553,14 @@ export function Studio({ engine, track, onExit, onSaved, toast, bank, onUserSoun
           <small>ESTÚDIO</small>
           <strong>{track.title}</strong>
         </div>
+        <label className="tool-select" title={stemsAvail ? 'Use só uma parte da música (stems)' : 'Separe os stems desta música num deck (✨ Separar) para liberar'}>
+          Parte
+          <select value={part} disabled={!stemsAvail} onChange={(e) => { stop(); setPart(e.target.value as PartMode); }}>
+            {(Object.keys(PART_LABEL) as PartMode[]).map((k) => (
+              <option key={k} value={k}>{PART_LABEL[k]}</option>
+            ))}
+          </select>
+        </label>
         <div className="studio-dur">
           {fmtTime(track.duration)} → <b>{fmtTime(total)}</b>
         </div>

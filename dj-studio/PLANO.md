@@ -294,10 +294,12 @@ Acrescentam-se à trilha da seção 5: **"Corte seco no funk"**, **"Subindo a en
 - [x] **Relatório pós-set** ao parar a gravação (músicas com horário, nota de cada transição, dica principal) e **📊 Meus sets** com o histórico.
 - [x] **Playlists** (📁), filtro **Tocadas hoje** e **✨ Auto** hot cues pelas partes da música.
 
+- [x] **Stems com IA** (HTDemucs da Meta, MIT, via ONNX Runtime): "✨ Separar" no deck; modelo (~172 MB) baixado uma vez e guardado; stems salvos por música; liga/desliga 🎤 Vocal · 🥁 Batida · 🎸 Baixo · 🎹 Melodia + Acapella / Instrumental; no Estúdio, "Parte" para editar/exportar só o vocal, o instrumental ou batida+baixo. Validado com o modelo real no GitHub Actions (soma das partes ≈ original, erro 3,8%; ~0,8× o tempo da música na CPU).
+
 ### Próximos
 1. Testar com ela: abrir o `Pista.html`, deixar ela tocar sem explicar nada, anotar onde travou.
 2. Testar com a DDJ-FLX4 de verdade (mapa baseado no Mixxx; qualquer controle errado se corrige em ⚙ → "Aprender").
-3. Seguir o backlog: **stems** (16 — separar vocal/batida com modelo de IA no app de desktop), modo **Ensaiar** no fone (23) e o P3 (Estúdio multipista / "Versão funk", batidas prontas, grid dinâmico).
+3. Seguir o backlog: modo **Ensaiar** no fone (23) e o P3 — Estúdio multipista / **"Versão funk"** (agora possível com os stems: acapella de pop + tamborzão), batidas prontas, grid dinâmico.
 
 ---
 
@@ -395,7 +397,7 @@ Esforço: P = pequeno (dias), M = médio (1–2 semanas), G = grande (3+ semanas
 ### P2 — Inteligência que ensina
 | # | Funcionalidade | Inspiração | Esforço |
 |---|---|---|---|
-| 16 | **Stems** (vocal / batida / baixo / melodia) nos decks e no Estúdio | Todos menos Mixxx | G |
+| 16 | **Stems** (vocal / batida / baixo / melodia) nos decks e no Estúdio ✅ | Todos menos Mixxx | G |
 | 17 | **Transições prontas** com explicação ✅ | djay Crossfader Fusion | M |
 | 18 | **Sugestão da próxima música** (BPM, tom, energia, gênero) ✅ | rekordbox Related Tracks | P |
 | 19 | **Cue automático** (intro, refrão, breakdown, outro) ✅ | rekordbox Intelligent Cue | M |
