@@ -16,6 +16,8 @@ import { LEVEL_NAMES, LevelContext, type SkillLevel } from './components/Level';
 import { fmtTime, storageGet, storageSet, useEngine, useFrame } from './hooks';
 import { Studio } from './studio/Studio';
 import { Sampler, SAMPLER_KEYS } from './components/Sampler';
+import { LessonCard, LessonsModal, type Progress } from './components/Lessons';
+import { LESSONS, type Lesson } from './coach/lessons';
 import { SoundBank } from './studio/sounds';
 
 const engine = new AudioEngine();
@@ -63,6 +65,18 @@ export default function App() {
   const [libSel, setLibSel] = useState<string | null>(null);
   const syncFailRef = useRef<(id: DeckId) => void>(() => {});
   const samplerRef = useRef<(i: number) => void>(() => {});
+  // ---- lições ----
+  const [lessonsOpen, setLessonsOpen] = useState(false);
+  const [lesson, setLesson] = useState<{ l: Lesson; step: number } | null>(null);
+  const [passed, setPassed] = useState(false);
+  const lessonMem = useRef<Record<string, number | boolean | string>>({});
+  const [progress, setProgress] = useState<Progress>(() => {
+    try {
+      return JSON.parse(storageGet('pista.lessons') ?? '{}');
+    } catch {
+      return {};
+    }
+  });
   const midiRef = useRef<(action: string, value: number) => void>(() => {});
   const learnRef = useRef<string | null>(null);
   learnRef.current = learning;
@@ -293,6 +307,7 @@ export default function App() {
     };
     hub.onChange = () => setMidiVer((x) => x + 1);
     // Para testes e diagnóstico: simula mensagens da controladora (ex.: __pistaMidi([0x90, 0x0b, 0x7f])).
+    (window as unknown as { __pista: unknown }).__pista = { engine };
     (window as unknown as { __pistaMidi: (b: number[]) => void }).__pistaMidi = (b) => hub.onMessage(new Uint8Array(b));
     // Se ela já deu permissão antes, conecta sozinho.
     navigator.permissions
@@ -341,9 +356,18 @@ export default function App() {
       };
     };
     const s: Snapshot = { A: snap('A'), B: snap('B'), phaseMs: engine.phaseOffsetMs(), clip: p.clip, level };
+    if (lesson && !passed) {
+      const st = lesson.l.steps[lesson.step];
+      lessonMem.current.view = viewRef.current;
+      if (st && st.check({ engine, bank, tracks: tracksRef.current, mem: lessonMem.current, dt: step })) advanceLesson();
+    }
     const result: TransitionResult | null = judge.current.update(s, step);
     if (result && coachOn) toast(result.message, result.stars);
-    const next = coachOn ? coachTip(s) : null;
+    const next: Tip | null = lesson
+      ? { id: `lesson-${lesson.l.id}-${lesson.step}`, text: '', tone: 'info', target: lesson.l.steps[lesson.step]?.target }
+      : coachOn
+        ? coachTip(s)
+        : null;
     // Evita "piscar": troca de dica no máximo a cada 2,5 s (exceto alertas).
     const now = performance.now();
     const cur = shownTip.current;
@@ -355,6 +379,40 @@ export default function App() {
       setTip(next);
     }
   });
+
+  function advanceLesson() {
+    if (!lesson) return;
+    setPassed(true);
+    setTimeout(() => {
+      setPassed(false);
+      lessonMem.current = {};
+      const cur = lesson;
+      if (cur.step + 1 >= cur.l.steps.length) {
+        const np = { ...progress, [cur.l.id]: Date.now() };
+        storageSet('pista.lessons', JSON.stringify(np));
+        setProgress(np);
+        const left = LESSONS.filter((x) => !np[x.id]).length;
+        toast(`🎉 Lição "${cur.l.title}" concluída!${left ? ` Faltam ${left}.` : ' Você completou a trilha toda!'}`, 3);
+        setLesson(null);
+      } else setLesson({ l: cur.l, step: cur.step + 1 });
+    }, 900);
+  }
+
+  const startLesson = (l: Lesson) => {
+    setLessonsOpen(false);
+    lessonMem.current = {};
+    if (l.level > level) {
+      setLevel(l.level);
+      storageSet('pista.level', String(l.level));
+    }
+    if (l.setup) {
+      if (engine.recording) engine.stopRecording();
+      setView('decks');
+      l.setup({ engine, tracks, load: (d, t) => loadToDeck(d, t) });
+    }
+    setLesson({ l, step: 0 });
+    engine.resume();
+  };
 
   // Destaca o controle que a dica menciona.
   useEffect(() => {
@@ -479,6 +537,9 @@ export default function App() {
             Pista
             {name && <span className="hello">· bora tocar, {name}!</span>}
           </div>
+          <button className="btn learn" onClick={() => setLessonsOpen(true)} title="Lições guiadas">
+            🎓 Aprender <small>{LESSONS.filter((l) => progress[l.id]).length}/{LESSONS.length}</small>
+          </button>
           <div className="view-tabs" role="tablist" aria-label="Área">
             <button role="tab" aria-selected={view === 'decks'} className={`tab ${view === 'decks' ? 'on' : ''}`} onClick={() => setView('decks')}>
               🎧 Tocar
@@ -487,6 +548,7 @@ export default function App() {
               role="tab"
               aria-selected={view === 'studio'}
               className={`tab ${view === 'studio' ? 'on' : ''}`}
+              data-coach="studio-tab"
               onClick={() => {
                 if (studioTrack) setView('studio');
                 else openStudio(engine.decks.A.track ?? tracks[0] ?? null);
@@ -503,7 +565,7 @@ export default function App() {
                 </button>
               ))}
             </div>
-            <button className={`btn rec ${engine.recording ? 'on' : ''}`} onClick={toggleRec} title="Gravar o set (R)">
+            <button className={`btn rec ${engine.recording ? 'on' : ''}`} onClick={toggleRec} title="Gravar o set (R)" data-coach="rec">
               ● REC <span ref={recRef} />
             </button>
             <button className={`btn ghost ${hub.status.connected.length ? 'midi-on' : ''}`} onClick={() => setSettings(true)} title="Som, fone e controladora">
@@ -558,13 +620,13 @@ export default function App() {
           </div>
         </main>
 
-        <Sampler engine={engine} bank={bank} padsRef={samplerRef} />
+        <Sampler engine={engine} bank={bank} padsRef={samplerRef} onHit={() => (lessonMem.current.sampler = Number(lessonMem.current.sampler ?? 0) + 1)} />
 
         <div className={`coach ${tip ? `tone-${tip.tone}` : ''}`} role="status" aria-live="polite">
           <span className="coach-icon" aria-hidden>
             {tip?.tone === 'warn' ? '⚠️' : tip?.tone === 'good' ? '✨' : '💡'}
           </span>
-          <span className="coach-text">{coachOn ? tip?.text ?? 'Mandou bem! Continue assim.' : 'Dicas do Coach desligadas.'}</span>
+          <span className="coach-text">{lesson ? 'Lição em andamento — siga o cartão 🎓.' : coachOn ? tip?.text ?? 'Mandou bem! Continue assim.' : 'Dicas do Coach desligadas.'}</span>
           <button
             className="btn ghost tiny"
             onClick={() => {
@@ -632,6 +694,20 @@ export default function App() {
               </button>
             </div>
           </div>
+        )}
+
+        {lessonsOpen && <LessonsModal progress={progress} onStart={startLesson} onClose={() => setLessonsOpen(false)} />}
+        {lesson && (
+          <LessonCard
+            lesson={lesson.l}
+            step={lesson.step}
+            justPassed={passed}
+            onSkip={() => advanceLesson()}
+            onExit={() => {
+              setLesson(null);
+              setPassed(false);
+            }}
+          />
         )}
 
         {settings && (

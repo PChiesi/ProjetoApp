@@ -17,7 +17,7 @@ function initialPads(bank: SoundBank): (string | null)[] {
 }
 
 /** 8 pads com vinheta, buzina, sirene… Tocam no tempo da música (meia batida). */
-export function Sampler({ engine, bank, padsRef }: { engine: AudioEngine; bank: SoundBank; padsRef: { current: (i: number) => void } }) {
+export function Sampler({ engine, bank, padsRef, onHit }: { engine: AudioEngine; bank: SoundBank; padsRef: { current: (i: number) => void }; onHit?: () => void }) {
   const [pads, setPads] = useState<(string | null)[]>(() => initialPads(bank));
   const [editing, setEditing] = useState<number | null>(null);
   const [vol, setVol] = useState(0.9);
@@ -53,6 +53,7 @@ export function Sampler({ engine, bank, padsRef }: { engine: AudioEngine; bank: 
     }
     engine.resume();
     engine.playSample(s.buffer);
+    onHit?.();
     setHit(i);
     setTimeout(() => setHit((h) => (h === i ? null : h)), 160);
   };

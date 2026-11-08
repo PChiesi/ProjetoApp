@@ -321,11 +321,15 @@ export class Deck {
     this.changed();
   }
 
+  /** Chamado ao dar play num deck sincronizado (o motor alinha as batidas na hora). */
+  onSyncedPlay?: () => void;
+
   play() {
     if (!this.track || this.playing) return;
     if (this.offset >= this.track.duration - 0.05) this.offset = this.cuePoint;
     this.startSource(this.offset);
     this.playing = true;
+    if (this.synced) this.onSyncedPlay?.();
     this.changed();
   }
 
@@ -635,6 +639,8 @@ export class AudioEngine {
       A: new Deck('A', this.ctx, new Channel(this.ctx, this.bus, this.cueBus), notify),
       B: new Deck('B', this.ctx, new Channel(this.ctx, this.bus, this.cueBus), notify),
     };
+    this.decks.A.onSyncedPlay = () => this.decks.B.playing && this.alignPhase('A');
+    this.decks.B.onSyncedPlay = () => this.decks.A.playing && this.alignPhase('B');
     this.applyAll();
     loadKeyLock(this.ctx).then((ok) => {
       if (!ok) return;
