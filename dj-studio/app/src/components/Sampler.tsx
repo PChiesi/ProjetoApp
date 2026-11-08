@@ -45,6 +45,22 @@ export function Sampler({ engine, bank, padsRef, onHit }: { engine: AudioEngine;
     [bank],
   );
 
+  // Fecha o menu de troca de som ao clicar fora dele
+  useEffect(() => {
+    if (editing === null) return;
+    const close = (e: PointerEvent) => {
+      if (!(e.target as Element).closest?.('.sp-menu')) setEditing(null);
+    };
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setEditing(null);
+    const id = window.setTimeout(() => window.addEventListener('pointerdown', close), 0);
+    window.addEventListener('keydown', esc);
+    return () => {
+      clearTimeout(id);
+      window.removeEventListener('pointerdown', close);
+      window.removeEventListener('keydown', esc);
+    };
+  }, [editing]);
+
   const trigger = (i: number) => {
     const s = pads[i] ? bank.get(pads[i]!) : undefined;
     if (!s) {

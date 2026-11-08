@@ -7,6 +7,8 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         // Lembra as pastas escolhidas (ex.: D:\Músicas) entre uma abertura e outra
         .plugin(tauri_plugin_persisted_scope::init())
+        // Abre as aulas do YouTube no navegador padrão
+        .plugin(tauri_plugin_opener::init())
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o Pista");
 }

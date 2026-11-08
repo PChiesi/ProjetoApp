@@ -21,6 +21,8 @@ Atalhos: aperte <kbd>?</kbd> dentro do app.
 
 **Músicas:** "📂 Importar pasta" traz uma pasta inteira (com subpastas). "👁 Vigiar uma pasta" faz toda música nova salva nela entrar sozinha na biblioteca, já analisada — ótimo para a pasta onde ficam as músicas compradas. Músicas repetidas não entram duas vezes.
 
+**🎬 Aulas:** vídeos do YouTube escolhidos por tema (primeiros passos, beatmatching, EQ, transições, funk, efeitos, hot cues, tom, remix). Abrem no navegador e ficam marcados como vistos.
+
 **Tudo fica salvo** no próprio navegador (músicas, edições, vinhetas, hot cues). Use sempre o mesmo navegador e o mesmo arquivo `Pista.html`.
 
 **Estúdio:** clique em ✎ ao lado de uma música (ou na aba "✂ Estúdio") para cortar, repetir e estender trechos, fazer fades e salvar a sua versão — ela volta para a biblioteca pronta para tocar.

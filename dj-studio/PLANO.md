@@ -298,6 +298,9 @@ Acrescentam-se à trilha da seção 5: **"Corte seco no funk"**, **"Subindo a en
 
 - [x] **Importar pasta** (com subpastas, sem duplicar) e **pasta vigiada** (músicas novas entram sozinhas; no app instalado lê direto do disco e lembra a pasta).
 
+- [x] **11 efeitos ao vivo** (Eco, Ping Pong, Dub Echo, Reverb, Flanger, Phaser, Filtro Auto, Trans/Picotar, Roll com "slip", Crush, Ruído) + Freio e **Spinback**; **12 sons** no sampler (novos: Apito, Scratch, Sweep ↑/↓, Sub Drop).
+- [x] **🎬 Aulas**: 34 vídeos do YouTube em 9 temas (PT/EN), marcar como visto, "Buscar mais" e atalho para a lição prática do mesmo tema.
+
 ### Próximos
 1. Testar com ela: abrir o `Pista.html`, deixar ela tocar sem explicar nada, anotar onde travou.
 2. Testar com a DDJ-FLX4 de verdade (mapa baseado no Mixxx; qualquer controle errado se corrige em ⚙ → "Aprender").

@@ -18,6 +18,7 @@ import { fmtTime, storageGet, storageSet, useEngine, useFrame } from './hooks';
 import { Studio } from './studio/Studio';
 import { Sampler, SAMPLER_KEYS } from './components/Sampler';
 import { LessonCard, LessonsModal, type Progress } from './components/Lessons';
+import { VideosModal } from './components/VideosModal';
 import { LESSONS, type Lesson } from './coach/lessons';
 import { TransitionRunner, type TransitionId } from './coach/transitions';
 import { Automix } from './coach/automix';
@@ -88,6 +89,7 @@ export default function App() {
   const automixRef = useRef<Automix | null>(null);
   // ---- lições ----
   const [lessonsOpen, setLessonsOpen] = useState(false);
+  const [videosOpen, setVideosOpen] = useState(false);
   const [lesson, setLesson] = useState<{ l: Lesson; step: number } | null>(null);
   const [passed, setPassed] = useState(false);
   const lessonMem = useRef<Record<string, number | boolean | string>>({});
@@ -740,6 +742,9 @@ export default function App() {
           <button className="btn learn" onClick={() => setLessonsOpen(true)} title="Lições guiadas">
             🎓 Aprender <small>{LESSONS.filter((l) => progress[l.id]).length}/{LESSONS.length}</small>
           </button>
+          <button className="btn ghost" onClick={() => setVideosOpen(true)} title="Aulas em vídeo organizadas por tema">
+            🎬 Aulas
+          </button>
           <div className="view-tabs" role="tablist" aria-label="Área">
             <button role="tab" aria-selected={view === 'decks'} className={`tab ${view === 'decks' ? 'on' : ''}`} onClick={() => setView('decks')}>
               🎧 Tocar
@@ -952,6 +957,15 @@ export default function App() {
           />
         )}
         {report && <SetReportModal report={report} onClose={() => setReport(null)} />}
+        {videosOpen && (
+          <VideosModal
+            onClose={() => setVideosOpen(false)}
+            onLesson={(id) => {
+              const l = LESSONS.find((x) => x.id === id);
+              if (l) startLesson(l);
+            }}
+          />
+        )}
         {lessonsOpen && <LessonsModal progress={progress} onStart={startLesson} onClose={() => setLessonsOpen(false)} />}
         {lesson && (
           <LessonCard

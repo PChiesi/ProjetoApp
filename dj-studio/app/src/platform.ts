@@ -22,3 +22,17 @@ export async function saveFile(blob: Blob, name: string, kind: { label: string; 
   setTimeout(() => URL.revokeObjectURL(url), 10000);
   return 'Downloads';
 }
+
+/** Abre um link no navegador (no app instalado, abre o navegador padrão do Windows). */
+export async function openExternal(url: string) {
+  if (isDesktopApp) {
+    try {
+      const { openUrl } = await import('@tauri-apps/plugin-opener');
+      await openUrl(url);
+      return;
+    } catch {
+      /* cai no jeito do navegador */
+    }
+  }
+  window.open(url, '_blank', 'noopener');
+}

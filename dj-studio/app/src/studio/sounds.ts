@@ -172,6 +172,98 @@ const SYNTHS: { id: string; name: string; icon: string; fn: Synth }[] = [
   },
 ];
 
+
+/** Ruído branco filtrado com a frequência subindo ou descendo (sweep). */
+function sweep(sr: number, up: boolean, seed: number): Float32Array {
+  const rnd = mulberry(seed);
+  const d = 2.2;
+  const out = new Float32Array(Math.floor(sr * d));
+  let lp = 0;
+  let lp2 = 0;
+  for (let i = 0; i < out.length; i++) {
+    const k = i / out.length;
+    const pos = up ? k : 1 - k;
+    const c = 0.01 + 0.5 * pos * pos;
+    const n = rnd() * 2 - 1;
+    lp += c * (n - lp);
+    lp2 += c * (lp - lp2);
+    const env = up ? Math.pow(k, 1.4) : Math.pow(1 - k, 1.2) * Math.min(1, k * 40);
+    out[i] = (n - lp2) * env;
+  }
+  return norm(out, 0.7);
+}
+
+SYNTHS.push(
+  {
+    id: 'apito',
+    name: 'Apito',
+    icon: '😗',
+    fn: (sr) => {
+      // apito de baile: "fiu-fiuuu" com trinado
+      const out = new Float32Array(Math.floor(sr * 0.9));
+      const blasts = [
+        [0, 0.16, 2900],
+        [0.24, 0.55, 3100],
+      ];
+      for (const [t0, d, f] of blasts) {
+        let ph = 0;
+        for (let i = 0; i < d * sr; i++) {
+          const t = i / sr;
+          const trill = 1 + 0.03 * Math.sign(Math.sin(2 * Math.PI * 28 * t));
+          const glide = 1 + 0.06 * Math.min(1, t * 12);
+          ph += (f * trill * glide) / sr;
+          const env = Math.min(1, t * 120) * Math.min(1, (d - t) * 30);
+          out[Math.floor(t0 * sr) + i] += Math.sin(2 * Math.PI * ph) * env;
+        }
+      }
+      return norm(out, 0.6);
+    },
+  },
+  {
+    id: 'scratch',
+    name: 'Scratch',
+    icon: '💿',
+    fn: (sr) => {
+      // vai e volta do disco: chiado com "altura" mudando rápido
+      const rnd = mulberry(23);
+      const d = 0.6;
+      const out = new Float32Array(Math.floor(sr * d));
+      let lp = 0;
+      let bp = 0;
+      for (let i = 0; i < out.length; i++) {
+        const t = i / sr;
+        const speed = Math.abs(Math.sin(2 * Math.PI * 3.3 * t)); // duas idas e voltas
+        const c = 0.02 + 0.35 * speed;
+        const n = rnd() * 2 - 1;
+        lp += c * (n - lp);
+        bp += 0.5 * (lp - bp);
+        const tone = Math.sin(2 * Math.PI * (180 + 900 * speed) * t);
+        out[i] = (lp - bp * 0.6 + tone * 0.25) * speed * Math.min(1, (d - t) * 20);
+      }
+      return norm(out, 0.75);
+    },
+  },
+  { id: 'sweep-up', name: 'Sweep ↑', icon: '🌪️', fn: (sr) => sweep(sr, true, 31) },
+  { id: 'sweep-down', name: 'Sweep ↓', icon: '🍃', fn: (sr) => sweep(sr, false, 37) },
+  {
+    id: 'subdrop',
+    name: 'Sub Drop',
+    icon: '🔊',
+    fn: (sr) => {
+      // grave descendo, para marcar o drop
+      const d = 1.8;
+      const out = new Float32Array(Math.floor(sr * d));
+      let ph = 0;
+      for (let i = 0; i < out.length; i++) {
+        const t = i / sr;
+        ph += (30 + 45 * Math.exp(-t * 2.2)) / sr;
+        out[i] = Math.sin(2 * Math.PI * ph) * Math.min(1, t * 200) * Math.exp(-t * 1.1);
+      }
+      return norm(out, 0.9);
+    },
+  },
+);
+
 function toBuffer(ctx: BaseAudioContext, mono: Float32Array): AudioBuffer {
   const b = ctx.createBuffer(2, mono.length, ctx.sampleRate);
   b.copyToChannel(mono, 0);

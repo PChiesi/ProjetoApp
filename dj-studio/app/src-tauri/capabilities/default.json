@@ -68,6 +68,20 @@
           "path": "$DOCUMENT/**"
         }
       ]
+    },
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://www.youtube.com/*"
+        },
+        {
+          "url": "https://youtube.com/*"
+        },
+        {
+          "url": "https://m.youtube.com/*"
+        }
+      ]
     }
   ]
 }

@@ -17,7 +17,7 @@ export const STEM_INFO: Record<StemId, { name: string; icon: string }> = {
 };
 export type StemSet = Record<StemId, AudioBuffer>;
 
-export type DeckFxType = 'eco' | 'reverb' | 'flanger' | 'picotar';
+export type DeckFxType = 'eco' | 'pingpong' | 'dubeco' | 'reverb' | 'flanger' | 'phaser' | 'autofiltro' | 'picotar' | 'crush' | 'ruido' | 'roll';
 export interface DeckFxState {
   type: DeckFxType;
   on: boolean;
@@ -26,11 +26,18 @@ export interface DeckFxState {
   /** Eco: fração da batida (0.5, 0.75, 1). */
   div: number;
 }
-export const DECK_FX: Record<DeckFxType, { name: string; desc: string }> = {
-  eco: { name: 'Eco', desc: 'Repete o som no tempo; ao desligar, o eco continua sumindo sozinho.' },
-  reverb: { name: 'Reverb', desc: 'Ambiente de salão. Ótimo para sair de uma música.' },
-  flanger: { name: 'Flanger', desc: 'Som de "avião passando", em ciclos de 2 compassos.' },
-  picotar: { name: 'Picotar', desc: 'Liga e desliga o som em colcheias, no tempo da música.' },
+export const DECK_FX: Record<DeckFxType, { name: string; desc: string; group: string }> = {
+  eco: { name: 'Eco', group: 'Ecos', desc: 'Repete o som no tempo; ao desligar, o eco continua sumindo sozinho. O efeito mais usado nas saídas.' },
+  pingpong: { name: 'Ping Pong', group: 'Ecos', desc: 'Eco que pula de um lado para o outro (esquerda/direita).' },
+  dubeco: { name: 'Dub Echo', group: 'Ecos', desc: 'Eco "de dub": sem graves e com repetições longas que vão escurecendo. Clássico das transições.' },
+  reverb: { name: 'Reverb', group: 'Ambiente', desc: 'Ambiente de salão. Ótimo para sair de uma música ou antes de um drop.' },
+  flanger: { name: 'Flanger', group: 'Modulação', desc: 'Som de "avião passando", em ciclos de 2 compassos.' },
+  phaser: { name: 'Phaser', group: 'Modulação', desc: 'Varredura suave, como um "chiado" que gira — bom em vocais e melodias.' },
+  autofiltro: { name: 'Filtro Auto', group: 'Modulação', desc: 'Filtro que abre e fecha sozinho no tempo da música (efeito "wah").' },
+  picotar: { name: 'Trans / Picotar', group: 'Ritmo', desc: 'Liga e desliga o som em colcheias, no tempo da música.' },
+  roll: { name: 'Roll', group: 'Ritmo', desc: 'Repete um pedacinho (1/4, 1/2 ou 1 batida) enquanto ligado; ao desligar a música volta onde estaria.' },
+  crush: { name: 'Crush', group: 'Textura', desc: 'Som "digital/sujo" (bitcrusher). Intensidade = quanto suja.' },
+  ruido: { name: 'Ruído', group: 'Textura', desc: 'Chiado branco por cima da música, para criar tensão antes do drop.' },
 };
 
 export type DeckId = 'A' | 'B';
@@ -95,6 +102,24 @@ class Channel {
   readonly flSend: GainNode;
   readonly flDelay: DelayNode;
   readonly flLfo: OscillatorNode;
+  /** Sinal seco (os efeitos de inserção abaixam ele e assumem). */
+  readonly dry: GainNode;
+  readonly ppSend: GainNode;
+  readonly ppA: DelayNode;
+  readonly ppB: DelayNode;
+  readonly ppFb: GainNode;
+  readonly dubSend: GainNode;
+  readonly dubDelay: DelayNode;
+  readonly dubFb: GainNode;
+  readonly phSend: GainNode;
+  readonly phLfo: OscillatorNode;
+  readonly afWet: GainNode;
+  readonly afFilter: BiquadFilterNode;
+  readonly afLfo: OscillatorNode;
+  readonly crushWet: GainNode;
+  readonly crushShaper: WaveShaperNode;
+  readonly noiseGain: GainNode;
+  readonly noiseHp: BiquadFilterNode;
 
   constructor(ctx: AudioContext, out: AudioNode, cueBus: AudioNode) {
     this.input = ctx.createGain();
@@ -125,7 +150,8 @@ class Channel {
     this.gateLfo.type = 'square';
     this.gateLfo.connect(this.gateDepth).connect(this.gate.gain);
     this.gateLfo.start();
-    this.filter.connect(this.gate).connect(this.fader);
+    this.dry = ctx.createGain();
+    this.filter.connect(this.gate).connect(this.dry).connect(this.fader);
     // Eco (envio com realimentação)
     this.ecoSend = ctx.createGain();
     this.ecoSend.gain.value = 0;
@@ -155,11 +181,111 @@ class Channel {
     this.gate.connect(this.flSend).connect(this.flDelay);
     this.flDelay.connect(flFb).connect(this.flDelay);
     this.flDelay.connect(this.fader);
+
+    // Ping Pong: dois atrasos em cadeia, um em cada lado
+    this.ppSend = ctx.createGain();
+    this.ppSend.gain.value = 0;
+    this.ppA = ctx.createDelay(4);
+    this.ppB = ctx.createDelay(4);
+    this.ppFb = ctx.createGain();
+    const panL = ctx.createStereoPanner();
+    panL.pan.value = -1;
+    const panR = ctx.createStereoPanner();
+    panR.pan.value = 1;
+    this.gate.connect(this.ppSend).connect(this.ppA);
+    this.ppA.connect(panL).connect(this.fader);
+    this.ppA.connect(this.ppB);
+    this.ppB.connect(panR).connect(this.fader);
+    this.ppB.connect(this.ppFb).connect(this.ppA);
+
+    // Dub Echo: realimentação passando por filtros (sem grave, escurecendo)
+    this.dubSend = ctx.createGain();
+    this.dubSend.gain.value = 0;
+    this.dubDelay = ctx.createDelay(4);
+    this.dubFb = ctx.createGain();
+    const dubHp = ctx.createBiquadFilter();
+    dubHp.type = 'highpass';
+    dubHp.frequency.value = 350;
+    const dubLp = ctx.createBiquadFilter();
+    dubLp.type = 'lowpass';
+    dubLp.frequency.value = 2600;
+    this.gate.connect(this.dubSend).connect(dubHp).connect(this.dubDelay);
+    this.dubDelay.connect(dubLp).connect(this.dubFb).connect(this.dubDelay);
+    this.dubDelay.connect(this.fader);
+
+    // Phaser: 4 filtros passa-tudo com a frequência oscilando
+    this.phSend = ctx.createGain();
+    this.phSend.gain.value = 0;
+    this.phLfo = ctx.createOscillator();
+    const phDepth = ctx.createGain();
+    phDepth.gain.value = 700;
+    this.phLfo.connect(phDepth);
+    let ph: AudioNode = this.gate.connect(this.phSend);
+    for (let i = 0; i < 4; i++) {
+      const ap = ctx.createBiquadFilter();
+      ap.type = 'allpass';
+      ap.frequency.value = 900;
+      ap.Q.value = 0.6;
+      phDepth.connect(ap.frequency);
+      ph = ph.connect(ap);
+    }
+    ph.connect(this.fader);
+    this.phLfo.start();
+
+    // Filtro automático (inserção): passa-baixa ressonante com LFO
+    this.afWet = ctx.createGain();
+    this.afWet.gain.value = 0;
+    this.afFilter = ctx.createBiquadFilter();
+    this.afFilter.type = 'lowpass';
+    this.afFilter.Q.value = 6;
+    this.afFilter.frequency.value = 1400;
+    this.afLfo = ctx.createOscillator();
+    this.afLfo.type = 'triangle';
+    const afDepth = ctx.createGain();
+    afDepth.gain.value = 1200;
+    this.afLfo.connect(afDepth).connect(this.afFilter.frequency);
+    this.afLfo.start();
+    this.gate.connect(this.afFilter).connect(this.afWet).connect(this.fader);
+
+    // Crush (inserção): degraus na forma de onda
+    this.crushWet = ctx.createGain();
+    this.crushWet.gain.value = 0;
+    this.crushShaper = ctx.createWaveShaper();
+    this.gate.connect(this.crushShaper).connect(this.crushWet).connect(this.fader);
+
+    // Ruído branco com passa-alta
+    this.noiseGain = ctx.createGain();
+    this.noiseGain.gain.value = 0;
+    this.noiseHp = ctx.createBiquadFilter();
+    this.noiseHp.type = 'highpass';
+    const nb = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const nd = nb.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    const noise = ctx.createBufferSource();
+    noise.buffer = nb;
+    noise.loop = true;
+    noise.connect(this.noiseHp).connect(this.noiseGain).connect(this.fader);
+    noise.start();
     this.cueSend = ctx.createGain();
     this.cueSend.gain.value = 0;
     this.filter.connect(this.cueSend).connect(cueBus);
     this.fader.connect(this.meter);
     this.fader.connect(this.xfade).connect(out);
+  }
+
+  private crushBits = -1;
+  /** Ajusta a "resolução" do crush (menos bits = mais sujo). */
+  setCrush(bits: number) {
+    if (bits === this.crushBits) return;
+    this.crushBits = bits;
+    const n = 2048;
+    const curve = new Float32Array(n);
+    const steps = Math.pow(2, bits);
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1;
+      curve[i] = Math.round(x * steps) / steps;
+    }
+    this.crushShaper.curve = curve;
   }
 
   peak(): number {
@@ -486,6 +612,60 @@ export class Deck {
     this.nudgeFactor = 1 + dir * 0.04;
     for (const x of this.all()) x.playbackRate.setTargetAtTime(this.playbackRate, this.ctx.currentTime, 0.005);
     this.updatePitch();
+  }
+
+  private slip: { pos: number; t: number } | null = null;
+  /** Roll: repete um pedacinho; ao parar, a música continua onde estaria (modo "slip"). */
+  startRoll(beats: number) {
+    if (!this.track || !this.playing) return;
+    if (!this.slip) this.slip = { pos: this.position(), t: this.ctx.currentTime };
+    const start = this.snap(this.position(), 'floor');
+    this.loop = null;
+    this.offset = this.position();
+    this.anchor = this.ctx.currentTime;
+    const b = 60 / this.track.bpm;
+    this.loop = { start, end: start + b * beats, beats };
+    this.restartAt(Math.max(start, Math.min(this.offset, start + b * beats - 0.001)));
+    this.changed();
+  }
+
+  stopRoll() {
+    if (!this.slip) return;
+    const target = this.slip.pos + (this.ctx.currentTime - this.slip.t) * this.playbackRate;
+    this.slip = null;
+    this.loop = null;
+    if (this.playing) this.restartAt(target);
+    else this.offset = target;
+    this.changed();
+  }
+
+  /** Spinback: a música "volta girando" para trás e para (como puxar o vinil). */
+  spinback() {
+    if (!this.track?.buffer || !this.playing || this.braking) return;
+    const pos = this.position();
+    const ctx = this.ctx;
+    const len = Math.min(pos, 2.5);
+    const sr = this.track.buffer.sampleRate;
+    const n = Math.max(1, Math.floor(len * sr));
+    const rev = ctx.createBuffer(this.track.buffer.numberOfChannels, n, sr);
+    for (let c = 0; c < rev.numberOfChannels; c++) {
+      const src = this.track.buffer.getChannelData(c);
+      const dst = rev.getChannelData(c);
+      const a = Math.floor((pos - len) * sr);
+      for (let i = 0; i < n; i++) dst[i] = src[a + n - 1 - i];
+    }
+    this.pause();
+    const s = ctx.createBufferSource();
+    s.buffer = rev;
+    const g = ctx.createGain();
+    s.connect(g).connect(this.channel.input);
+    const t = ctx.currentTime;
+    s.playbackRate.setValueAtTime(2.6, t);
+    s.playbackRate.exponentialRampToValueAtTime(0.25, t + 1.1);
+    g.gain.setValueAtTime(1, t);
+    g.gain.linearRampToValueAtTime(0, t + 1.2);
+    s.start(t);
+    s.stop(t + 1.25);
   }
 
   private braking = false;
@@ -825,6 +1005,29 @@ export class AudioEngine {
       s(ch.gate.gain, 1 - depth / 2);
       s(ch.gateDepth.gain, depth / 2);
       s(ch.gateLfo.frequency, 2 / beat);
+      // ecos
+      s(ch.ppSend.gain, on('pingpong') ? 0.3 + fx.amount * 0.7 : 0);
+      s(ch.ppA.delayTime, Math.min(3.9, beat * fx.div));
+      s(ch.ppB.delayTime, Math.min(3.9, beat * fx.div));
+      s(ch.ppFb.gain, 0.35 + fx.amount * 0.3);
+      s(ch.dubSend.gain, on('dubeco') ? 0.35 + fx.amount * 0.65 : 0);
+      s(ch.dubDelay.delayTime, Math.min(3.9, beat * Math.max(0.75, fx.div)));
+      s(ch.dubFb.gain, 0.55 + fx.amount * 0.3);
+      // modulação
+      s(ch.phSend.gain, on('phaser') ? 0.5 + fx.amount * 0.5 : 0);
+      s(ch.phLfo.frequency, 1 / (beat * 4));
+      const af = on('autofiltro');
+      s(ch.afWet.gain, af ? 1 : 0);
+      s(ch.afLfo.frequency, 1 / (beat * (fx.div >= 1 ? 4 : fx.div >= 0.75 ? 2 : 1)));
+      s(ch.afFilter.Q, 3 + fx.amount * 9);
+      // textura
+      const cr = on('crush');
+      ch.setCrush(Math.round(8 - fx.amount * 5));
+      s(ch.crushWet.gain, cr ? 1 : 0);
+      s(ch.noiseGain.gain, on('ruido') ? 0.02 + fx.amount * 0.12 : 0);
+      s(ch.noiseHp.frequency, 300 + fx.amount * 6000);
+      // efeitos de inserção abaixam o sinal seco
+      s(ch.dry.gain, af || cr ? 0 : 1);
       s(ch.xfade.gain, this.xfGain(id));
     }
     this.masterGain && s(this.masterGain.gain, this.mix.master);
@@ -966,7 +1169,14 @@ export class AudioEngine {
   }
 
   setFx(id: DeckId, patch: Partial<DeckFxState>) {
+    const before = this.fx[id];
     this.fx = { ...this.fx, [id]: { ...this.fx[id], ...patch } };
+    const after = this.fx[id];
+    const d = this.decks[id];
+    const rollOn = after.on && after.type === 'roll';
+    const wasRoll = before.on && before.type === 'roll';
+    if (rollOn && (!wasRoll || before.div !== after.div)) d.startRoll(after.div);
+    if (!rollOn && wasRoll) d.stopRoll();
     this.applyAll();
     this.emit();
   }
