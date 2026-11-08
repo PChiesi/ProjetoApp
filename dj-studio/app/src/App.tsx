@@ -18,6 +18,9 @@ import { Studio } from './studio/Studio';
 import { Sampler, SAMPLER_KEYS } from './components/Sampler';
 import { LessonCard, LessonsModal, type Progress } from './components/Lessons';
 import { LESSONS, type Lesson } from './coach/lessons';
+import { TransitionRunner, type TransitionId } from './coach/transitions';
+import { Automix } from './coach/automix';
+import { AutoBar } from './components/AutoBar';
 import { SoundBank } from './studio/sounds';
 
 const engine = new AudioEngine();
@@ -65,6 +68,12 @@ export default function App() {
   const [libSel, setLibSel] = useState<string | null>(null);
   const syncFailRef = useRef<(id: DeckId) => void>(() => {});
   const samplerRef = useRef<(i: number) => void>(() => {});
+  // ---- transições prontas e automix ----
+  const [narration, setNarration] = useState<string | null>(null);
+  const [runningTr, setRunningTr] = useState<string | null>(null);
+  const [automixOn, setAutomixOn] = useState(false);
+  const runnerRef = useRef<TransitionRunner | null>(null);
+  const automixRef = useRef<Automix | null>(null);
   // ---- lições ----
   const [lessonsOpen, setLessonsOpen] = useState(false);
   const [lesson, setLesson] = useState<{ l: Lesson; step: number } | null>(null);
@@ -172,6 +181,41 @@ export default function App() {
     },
     [toast],
   );
+
+  const loadAsync = useCallback(async (id: DeckId, t: Track) => {
+    const d = engine.decks[id];
+    if (d.playing && engine.audibility(id) > 0.25) return false;
+    try {
+      await ensureBuffer(engine.ctx, t);
+      d.load(t);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const runTransition = useCallback((out: DeckId, inc: DeckId, id: TransitionId, onEnd?: (ok: boolean) => void): string | null => {
+    runnerRef.current?.stop(false);
+    const r = new TransitionRunner(engine, out, inc, id, (text) => setNarration(text), (ok) => {
+      if (runnerRef.current === r) runnerRef.current = null;
+      setRunningTr(null);
+      onEnd?.(ok);
+    });
+    const err = r.start();
+    if (err) return err;
+    runnerRef.current = r;
+    setRunningTr(r.def.name);
+    return null;
+  }, []);
+
+  if (!automixRef.current)
+    automixRef.current = new Automix({
+      engine,
+      tracks: () => tracksRef.current,
+      load: (d, t) => loadAsync(d, t),
+      say: (text) => setNarration(text),
+      run: (o, i, id, onEnd) => runTransition(o, i, id, onEnd),
+    });
 
   const openStudio = useCallback(
     (t: Track | null) => {
@@ -362,7 +406,9 @@ export default function App() {
       if (st && st.check({ engine, bank, tracks: tracksRef.current, mem: lessonMem.current, dt: step })) advanceLesson();
     }
     const result: TransitionResult | null = judge.current.update(s, step);
-    if (result && coachOn) toast(result.message, result.stars);
+    const auto = !!runnerRef.current || automixRef.current?.on;
+    if (result && coachOn && !auto) toast(result.message, result.stars);
+    if (automixRef.current?.on) automixRef.current.tick();
     const next: Tip | null = lesson
       ? { id: `lesson-${lesson.l.id}-${lesson.step}`, text: '', tone: 'info', target: lesson.l.steps[lesson.step]?.target }
       : coachOn
@@ -620,13 +666,38 @@ export default function App() {
           </div>
         </main>
 
+        <AutoBar
+          engine={engine}
+          running={runningTr}
+          automix={automixOn}
+          onRun={(id) => {
+            const live = (['A', 'B'] as DeckId[]).filter((d) => engine.decks[d].playing).sort((x, y) => engine.audibility(y) - engine.audibility(x))[0];
+            if (!live) return toast('Toque uma música primeiro.');
+            const err = runTransition(live, live === 'A' ? 'B' : 'A', id);
+            if (err) toast(err);
+          }}
+          onCancel={() => {
+            runnerRef.current?.stop(false);
+            setNarration('Transição cancelada.');
+          }}
+          onAutomix={(on) => {
+            const a = automixRef.current!;
+            if (on) a.start();
+            else {
+              a.stop();
+              runnerRef.current?.stop(false);
+            }
+            setAutomixOn(on);
+          }}
+        />
+
         <Sampler engine={engine} bank={bank} padsRef={samplerRef} onHit={() => (lessonMem.current.sampler = Number(lessonMem.current.sampler ?? 0) + 1)} />
 
         <div className={`coach ${tip ? `tone-${tip.tone}` : ''}`} role="status" aria-live="polite">
           <span className="coach-icon" aria-hidden>
-            {tip?.tone === 'warn' ? '⚠️' : tip?.tone === 'good' ? '✨' : '💡'}
+            {narration && (runningTr || automixOn) ? '🤖' : tip?.tone === 'warn' ? '⚠️' : tip?.tone === 'good' ? '✨' : '💡'}
           </span>
-          <span className="coach-text">{lesson ? 'Lição em andamento — siga o cartão 🎓.' : coachOn ? tip?.text ?? 'Mandou bem! Continue assim.' : 'Dicas do Coach desligadas.'}</span>
+          <span className="coach-text">{narration && (runningTr || automixOn) ? narration : lesson ? 'Lição em andamento — siga o cartão 🎓.' : coachOn ? tip?.text ?? 'Mandou bem! Continue assim.' : 'Dicas do Coach desligadas.'}</span>
           <button
             className="btn ghost tiny"
             onClick={() => {
