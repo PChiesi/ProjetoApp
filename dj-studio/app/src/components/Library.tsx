@@ -17,6 +17,10 @@ interface Props {
   onSelect?: (id: string) => void;
   editing?: string;
   onShowSets?: () => void;
+  folder?: { name: string | null; needsPermission: boolean };
+  onWatchFolder?: () => void;
+  onUnwatchFolder?: () => void;
+  onReconnectFolder?: () => void;
 }
 
 /** 'sugestoes' | 'todas' | 'A' | 'B' | 'tocadas' | 'pl:<nome>' */
@@ -49,7 +53,12 @@ function fits(t: Track, ref: Track | null): boolean {
   return near && key !== 'conflito';
 }
 
-export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, onRemove, editing, selectedId, onSelect, onShowSets }: Props) {
+export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, onRemove, editing, selectedId, onSelect, onShowSets, folder, onWatchFolder, onUnwatchFolder, onReconnectFolder }: Props) {
+  const folderInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    // seleção de pasta inteira (Chrome/Edge/app)
+    folderInput.current?.setAttribute('webkitdirectory', '');
+  }, []);
   const [playlists, setPlaylists] = useState<Playlists>(loadPlaylists);
   const [plMenu, setPlMenu] = useState<string | null>(null);
   const savePl = (p: Playlists) => {
@@ -130,6 +139,19 @@ export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, onRe
             📊 Meus sets
           </button>
         )}
+        <button className="btn ghost" onClick={() => folderInput.current?.click()} title="Adiciona todas as músicas de uma pasta (e subpastas)">
+          📂 Importar pasta
+        </button>
+        <input
+          ref={folderInput}
+          type="file"
+          multiple
+          hidden
+          onChange={(e) => {
+            if (e.target.files?.length) onFiles(e.target.files);
+            e.target.value = '';
+          }}
+        />
         <button className="btn add" onClick={() => input.current?.click()}>
           + Adicionar músicas
         </button>
@@ -145,6 +167,35 @@ export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, onRe
           }}
         />
       </div>
+      {folder && (
+        <div className={`watch-bar ${folder.name ? 'on' : ''}`}>
+          {folder.name ? (
+            <>
+              <span>
+                👁 Vigiando a pasta <b>{folder.name}</b> — música nova salva lá entra sozinha aqui.
+              </span>
+              {folder.needsPermission && (
+                <button className="btn tiny" onClick={onReconnectFolder}>
+                  Reconectar pasta
+                </button>
+              )}
+              <button className="btn tiny ghost" onClick={onWatchFolder}>
+                Trocar
+              </button>
+              <button className="btn tiny ghost" onClick={onUnwatchFolder}>
+                Parar
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="muted">Dica: escolha a pasta onde você salva as músicas que compra — as novas entram sozinhas, já analisadas.</span>
+              <button className="btn tiny" onClick={onWatchFolder}>
+                👁 Vigiar uma pasta
+              </button>
+            </>
+          )}
+        </div>
+      )}
       <div className="chips pl-chips" role="tablist" aria-label="Playlists">
         <button role="tab" aria-selected={filter === 'tocadas'} className={`chip ${filter === 'tocadas' ? 'on' : ''}`} onClick={() => setFilter('tocadas')}>
           🕘 Tocadas hoje

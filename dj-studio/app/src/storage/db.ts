@@ -23,6 +23,7 @@ export interface TrackRecord {
   waveform: Waveform;
   audio: Blob;
   addedAt: number;
+  sourceKey?: string;
 }
 
 export interface StateRecord {
@@ -106,6 +107,7 @@ export function trackToRecord(t: Track, audio: Blob): TrackRecord {
     waveform: t.waveform,
     audio,
     addedAt: Date.now(),
+    sourceKey: t.sourceKey,
   };
 }
 

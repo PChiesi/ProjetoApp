@@ -296,6 +296,8 @@ Acrescentam-se à trilha da seção 5: **"Corte seco no funk"**, **"Subindo a en
 
 - [x] **Stems com IA** (HTDemucs da Meta, MIT, via ONNX Runtime): "✨ Separar" no deck; modelo (~172 MB) baixado uma vez e guardado; stems salvos por música; liga/desliga 🎤 Vocal · 🥁 Batida · 🎸 Baixo · 🎹 Melodia + Acapella / Instrumental; no Estúdio, "Parte" para editar/exportar só o vocal, o instrumental ou batida+baixo. Validado com o modelo real no GitHub Actions (soma das partes ≈ original, erro 3,8%; ~0,8× o tempo da música na CPU).
 
+- [x] **Importar pasta** (com subpastas, sem duplicar) e **pasta vigiada** (músicas novas entram sozinhas; no app instalado lê direto do disco e lembra a pasta).
+
 ### Próximos
 1. Testar com ela: abrir o `Pista.html`, deixar ela tocar sem explicar nada, anotar onde travou.
 2. Testar com a DDJ-FLX4 de verdade (mapa baseado no Mixxx; qualquer controle errado se corrige em ⚙ → "Aprender").

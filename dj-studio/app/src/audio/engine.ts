@@ -49,6 +49,8 @@ export interface Track {
   buffer: AudioBuffer | null;
   /** Arquivo original (para decodificar sob demanda). */
   source?: Blob;
+  /** De onde veio (caminho na pasta / nome+tamanho): evita importar a mesma música duas vezes. */
+  sourceKey?: string;
   waveform: Waveform;
   demo: boolean;
   /** 8 hot cues (segundos) — ficam guardados na música. */

@@ -5,6 +5,8 @@ pub fn run() {
         // Diálogo "Salvar como" e gravação de arquivos (sets gravados, WAV do Estúdio)
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        // Lembra as pastas escolhidas (ex.: D:\Músicas) entre uma abertura e outra
+        .plugin(tauri_plugin_persisted_scope::init())
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o Pista");
 }

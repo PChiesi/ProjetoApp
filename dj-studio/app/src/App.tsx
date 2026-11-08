@@ -5,6 +5,7 @@ import { ensureBuffer, loadAllDemos, loadFile } from './audio/library';
 import { del, getAll, put, recordToTrack, saveTrackState, trackToRecord, type SoundRecord, type StateRecord, type TrackRecord } from './storage/db';
 import { encodeWav } from './studio/render';
 import { saveFile } from './platform';
+import { canWatchFolders, fileKey, hasPermission, listAudio, loadWatched, pickFolder, saveWatched, type WatchedFolder } from './storage/folders';
 import { flx4Leds, flx4Map, keyOf, MidiDecoder, MidiHub, ACTIONS, type Binding } from './midi/midi';
 import { Settings } from './midi/Settings';
 import { coachTip, TransitionJudge, type Snapshot, type Tip, type TransitionResult } from './coach/coach';
@@ -153,29 +154,107 @@ export default function App() {
     };
   }, []);
 
+  /** Já está na biblioteca (ou ela removeu de propósito)? */
+  const knownKey = (key: string) => {
+    if (tracksRef.current.some((t) => t.sourceKey === key)) return true;
+    try {
+      return (JSON.parse(storageGet('pista.ignored') ?? '[]') as string[]).includes(key);
+    } catch {
+      return false;
+    }
+  };
+
+  /** Importa arquivos (com a "chave" de origem para não duplicar). Retorna quantos entraram. */
+  const importItems = async (items: { key: string; name: string; getFile: () => Promise<File> }[], toDeck?: DeckId, quiet = false) => {
+    let added = 0;
+    for (const it of items) {
+      if (knownKey(it.key)) continue;
+      setPending((p) => [...p, it.name]);
+      try {
+        const f = await it.getFile();
+        const t = await loadFile(engine.ctx, f);
+        t.sourceKey = it.key;
+        setTracks((ts) => [...ts, t]);
+        tracksRef.current = [...tracksRef.current, t];
+        put('tracks', trackToRecord(t, f));
+        if (toDeck && added === 0) engine.decks[toDeck].load(t);
+        added++;
+      } catch {
+        if (!quiet) toast(`Não consegui abrir "${it.name}". O arquivo pode estar corrompido ou em formato não suportado.`);
+      } finally {
+        setPending((p) => p.filter((n) => n !== it.name));
+      }
+    }
+    return added;
+  };
+
   const addFiles = useCallback(
     async (files: FileList | File[], toDeck?: DeckId) => {
       const list = Array.from(files).filter((f) => f.type.startsWith('audio/') || /\.(mp3|wav|flac|ogg|m4a|aac)$/i.test(f.name));
       if (!list.length) {
-        toast('Esse arquivo não é de áudio. Use MP3, WAV, FLAC, OGG ou M4A.');
+        toast('Nenhum arquivo de áudio aqui. Use MP3, WAV, FLAC, OGG ou M4A.');
         return;
       }
-      for (const f of list) {
-        setPending((p) => [...p, f.name]);
-        try {
-          const t = await loadFile(engine.ctx, f);
-          setTracks((ts) => [...ts, t]);
-          put('tracks', trackToRecord(t, f));
-          if (toDeck && f === list[0]) engine.decks[toDeck].load(t);
-        } catch {
-          toast(`Não consegui abrir "${f.name}". O arquivo pode estar corrompido ou em formato não suportado.`);
-        } finally {
-          setPending((p) => p.filter((n) => n !== f.name));
-        }
-      }
+      const items = list.map((f) => ({ key: fileKey(f), name: f.name, getFile: async () => f }));
+      const dup = items.filter((i) => knownKey(i.key)).length;
+      const added = await importItems(items, toDeck);
+      if (list.length > 1 || dup) toast(`${added} música${added === 1 ? '' : 's'} adicionada${added === 1 ? '' : 's'}${dup ? ` · ${dup} já estava${dup === 1 ? '' : 'm'} na biblioteca` : ''}.`);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [toast],
   );
+
+  // ---- pasta vigiada ----
+  const [watched, setWatched] = useState<WatchedFolder | null>(null);
+  const [watchPerm, setWatchPerm] = useState(true);
+  const scanning = useRef(false);
+  const scan = useCallback(
+    async (f: WatchedFolder | null, announce = false) => {
+      if (!f || scanning.current) return;
+      if (!(await hasPermission(f))) return setWatchPerm(false);
+      setWatchPerm(true);
+      scanning.current = true;
+      try {
+        const files = await listAudio(f);
+        const fresh = files.filter((x) => !knownKey(x.key));
+        if (fresh.length) {
+          const n = await importItems(fresh, undefined, true);
+          if (n) toast(`📂 ${n} música${n === 1 ? ' nova' : 's novas'} da pasta "${f.name}" já ${n === 1 ? 'está' : 'estão'} na biblioteca.`);
+        } else if (announce) toast(`Vigiando a pasta "${f.name}": ${files.length} música${files.length === 1 ? '' : 's'}, todas já na biblioteca.`);
+      } catch {
+        if (announce) toast('Não consegui ler essa pasta.');
+      } finally {
+        scanning.current = false;
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [toast],
+  );
+  useEffect(() => {
+    if (!canWatchFolders()) return;
+    let w: WatchedFolder | null = null;
+    loadWatched().then((f) => {
+      w = f;
+      setWatched(f);
+      // espera a biblioteca salva carregar antes da primeira varredura
+      setTimeout(() => scan(f), 4000);
+    });
+    const tick = () => scan(w);
+    const iv = window.setInterval(tick, 15000);
+    window.addEventListener('focus', tick);
+    const sync = (e: Event) => (w = (e as CustomEvent<WatchedFolder | null>).detail);
+    window.addEventListener('pista-folder', sync);
+    return () => {
+      clearInterval(iv);
+      window.removeEventListener('focus', tick);
+      window.removeEventListener('pista-folder', sync);
+    };
+  }, [scan]);
+  const setFolder = (f: WatchedFolder | null) => {
+    setWatched(f);
+    saveWatched(f);
+    window.dispatchEvent(new CustomEvent('pista-folder', { detail: f }));
+  };
 
   const loadToDeck = useCallback(
     (id: DeckId, t: Track) => {
@@ -254,6 +333,15 @@ export default function App() {
         setView('decks');
       }
       del('tracks', t.id);
+      if (t.sourceKey) {
+        // não reimportar da pasta vigiada uma música que ela removeu
+        try {
+          const ign = JSON.parse(storageGet('pista.ignored') ?? '[]') as string[];
+          storageSet('pista.ignored', JSON.stringify([...ign, t.sourceKey].slice(-2000)));
+        } catch {
+          /* ignora */
+        }
+      }
     },
     [toast, studioTrack],
   );
@@ -780,7 +868,21 @@ export default function App() {
         </>
         )}
 
-        <Library engine={engine} tracks={tracks} pending={pending} onLoad={loadToDeck} onFiles={(f) => addFiles(f)} onEdit={openStudio} onRemove={removeTrack} onShowSets={() => setSetsOpen(true)} selectedId={libSel ?? undefined} onSelect={setLibSel} editing={view === 'studio' ? studioTrack?.id : undefined} />
+        <Library engine={engine} tracks={tracks} pending={pending} onLoad={loadToDeck} onFiles={(f) => addFiles(f)} onEdit={openStudio} onRemove={removeTrack} onShowSets={() => setSetsOpen(true)}
+          folder={canWatchFolders() ? { name: watched?.name ?? null, needsPermission: !!watched && !watchPerm } : undefined}
+          onWatchFolder={async () => {
+            const f = await pickFolder();
+            if (!f) return;
+            setFolder(f);
+            scan(f, true);
+          }}
+          onUnwatchFolder={() => {
+            setFolder(null);
+            toast('Pasta não é mais vigiada (as músicas continuam na biblioteca).');
+          }}
+          onReconnectFolder={async () => {
+            if (watched && (await hasPermission(watched, true))) scan(watched, true);
+          }} selectedId={libSel ?? undefined} onSelect={setLibSel} editing={view === 'studio' ? studioTrack?.id : undefined} />
 
         <div className="toasts" aria-live="polite">
           {toasts.map((t) => (
