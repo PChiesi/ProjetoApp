@@ -1,0 +1,71 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Pista",
+  "mainBinaryName": "Pista",
+  "version": "0.2.0",
+  "identifier": "app.pista.dj",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Pista",
+        "width": 1366,
+        "height": 860,
+        "minWidth": 1024,
+        "minHeight": 640,
+        "center": true,
+        "maximized": true,
+        "resizable": true,
+        "dragDropEnabled": false,
+        "backgroundColor": "#0d0e14"
+      }
+    ],
+    "security": {
+      "csp": null,
+      "headers": {
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Embedder-Policy": "credentialless"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis",
+      "msi"
+    ],
+    "publisher": "Pista",
+    "shortDescription": "Software de DJ para aprender a mixar",
+    "longDescription": "Pista: decks, mixer, Estúdio de edição e um Coach que ensina enquanto você toca.",
+    "category": "Music",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "languages": [
+          "PortugueseBR"
+        ],
+        "installMode": "currentUser",
+        "displayLanguageSelector": false
+      },
+      "wix": {
+        "language": "pt-BR"
+      }
+    }
+  }
+}
