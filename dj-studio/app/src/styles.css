@@ -403,3 +403,19 @@ kbd { background: var(--panel-2); border: 1px solid var(--line); border-bottom-w
 .btn.automix { margin-left: auto; }
 .btn.automix.on { background: var(--accent); color: #0d0e14; border-color: var(--accent); animation: pulse-ai 2s infinite; }
 @keyframes pulse-ai { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 25%, transparent); } }
+
+/* ---------- relatório do set ---------- */
+.report { max-width: 640px; max-height: calc(100vh - 32px); overflow: auto; }
+.report-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.report-stats div { background: var(--panel-2); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; align-items: center; }
+.report-stats b { font-size: 22px; font-variant-numeric: tabular-nums; }
+.report-stats small { color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.gold { color: var(--warn); }
+.report-tip { background: color-mix(in srgb, var(--accent) 14%, transparent); border: 1px solid var(--accent); border-radius: 10px; padding: 10px 12px; }
+.report-timeline { display: flex; flex-direction: column; gap: 4px; }
+.rt-row { display: grid; grid-template-columns: 52px 1fr; gap: 8px; padding: 6px 8px; border-radius: 8px; }
+.rt-row.tr { background: var(--panel-2); }
+.rt-row small { display: block; color: var(--muted); font-size: 12px; }
+.rt-time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.rt-stars { color: var(--warn); letter-spacing: 1px; }
+@media (max-width: 720px) { .report-stats { grid-template-columns: repeat(2, 1fr); } }

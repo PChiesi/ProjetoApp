@@ -21,6 +21,8 @@ import { LESSONS, type Lesson } from './coach/lessons';
 import { TransitionRunner, type TransitionId } from './coach/transitions';
 import { Automix } from './coach/automix';
 import { AutoBar } from './components/AutoBar';
+import { SetRecorder, type SetReport } from './coach/report';
+import { SetReportModal } from './components/SetReportModal';
 import { SoundBank } from './studio/sounds';
 
 const engine = new AudioEngine();
@@ -68,6 +70,9 @@ export default function App() {
   const [libSel, setLibSel] = useState<string | null>(null);
   const syncFailRef = useRef<(id: DeckId) => void>(() => {});
   const samplerRef = useRef<(i: number) => void>(() => {});
+  // ---- relatório pós-set ----
+  const setRec = useRef(new SetRecorder());
+  const [report, setReport] = useState<SetReport | null>(null);
   // ---- transições prontas e automix ----
   const [narration, setNarration] = useState<string | null>(null);
   const [runningTr, setRunningTr] = useState<string | null>(null);
@@ -406,8 +411,18 @@ export default function App() {
       if (st && st.check({ engine, bank, tracks: tracksRef.current, mem: lessonMem.current, dt: step })) advanceLesson();
     }
     const result: TransitionResult | null = judge.current.update(s, step);
-    const auto = !!runnerRef.current || automixRef.current?.on;
+    const auto = !!runnerRef.current || !!automixRef.current?.on;
     if (result && coachOn && !auto) toast(result.message, result.stars);
+    // Relatório do set (durante a gravação)
+    const nowS = performance.now() / 1000;
+    for (const d of ['A', 'B'] as DeckId[]) {
+      const dk = engine.decks[d];
+      if (dk.track && dk.playing && engine.audibility(d) > 0.25) setRec.current.noteTrack(dk.track.id, dk.track.title, dk.track.artist, nowS);
+    }
+    if (result) {
+      const to = (['A', 'B'] as DeckId[]).sort((x, y) => engine.audibility(y) - engine.audibility(x))[0];
+      setRec.current.noteTransition(result, engine.other(to).track?.title ?? '?', engine.decks[to].track?.title ?? '?', auto, nowS);
+    }
     if (automixRef.current?.on) automixRef.current.tick();
     const next: Tip | null = lesson
       ? { id: `lesson-${lesson.l.id}-${lesson.step}`, text: '', tone: 'info', target: lesson.l.steps[lesson.step]?.target }
@@ -483,6 +498,14 @@ export default function App() {
     if (engine.recording) {
       const blob = await engine.stopRecording();
       if (!blob) return;
+      const rep = setRec.current.finish(performance.now() / 1000);
+      setReport(rep);
+      try {
+        const old = JSON.parse(storageGet('pista.sets') ?? '[]');
+        storageSet('pista.sets', JSON.stringify([rep, ...old].slice(0, 30)));
+      } catch {
+        /* ignora */
+      }
       const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
       const where = await saveFile(blob, `pista-set-${stamp}.webm`, { label: 'Gravação do set', ext: 'webm' }).catch(() => null);
       if (where) toast(`Set salvo${where === 'Downloads' ? ' na pasta Downloads' : ''}! Escute depois para ver o que melhorar. 🎧`);
@@ -490,6 +513,7 @@ export default function App() {
     } else {
       await engine.resume();
       engine.startRecording();
+      setRec.current.start(performance.now() / 1000);
       toast('Gravando o seu set…');
     }
   }, [toast]);
@@ -767,6 +791,7 @@ export default function App() {
           </div>
         )}
 
+        {report && <SetReportModal report={report} onClose={() => setReport(null)} />}
         {lessonsOpen && <LessonsModal progress={progress} onStart={startLesson} onClose={() => setLessonsOpen(false)} />}
         {lesson && (
           <LessonCard
