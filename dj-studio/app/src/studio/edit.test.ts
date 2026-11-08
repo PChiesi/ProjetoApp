@@ -123,3 +123,74 @@ describe('sons e efeitos acompanham a edição', () => {
     expect(p.effects[0].t0).toBeCloseTo(48);
   });
 });
+
+import { addLayer, addFxLane, addSoundLane, effectiveVolume, moveClip, removeLayer, setItemGain, splitClip, timelineEnd, updateLane, clipLength } from './edit';
+
+describe('multipista', () => {
+  const g120 = { bpm: 120, firstBeat: 0 };
+  const src = { trackId: 'x', name: 'Funk', part: 'vocal' as const, bpm: 130, firstBeat: 0.5, duration: 60.5 };
+
+  it('faixa extra entra no BPM do projeto (130 → 120)', () => {
+    const p = addLayer(newProject('t', 10), g120, src, 4); // principal curta: quem define o fim é a faixa extra
+    const l = p.layers[0];
+    expect(l.rate).toBeCloseTo(120 / 130);
+    expect(l.clips[0].start).toBeCloseTo(0.5); // começa no "1" da música
+    expect(clipLength(l.clips[0], l.rate)).toBeCloseTo(60 / (120 / 130));
+    expect(timelineEnd(p, g120)).toBeCloseTo(4 + 60 * (130 / 120));
+  });
+
+  it('dobro/metade de BPM conta como o mesmo andamento', () => {
+    const p = addLayer(newProject('t', 100), { bpm: 150, firstBeat: 0 }, { ...src, bpm: 75 }, 0);
+    expect(p.layers[0].rate).toBeCloseTo(1);
+  });
+
+  it('dividir e mover trechos', () => {
+    let p = addLayer(newProject('t', 100), g120, { ...src, bpm: 120, firstBeat: 0, duration: 40 }, 0);
+    const id = p.layers[0].id;
+    p = splitClip(p, id, p.layers[0].clips[0].id, 10);
+    expect(p.layers[0].clips.map((c) => [c.at, c.start, c.end])).toEqual([
+      [0, 0, 10],
+      [10, 10, 40],
+    ]);
+    p = moveClip(p, id, p.layers[0].clips[1].id, 20);
+    expect(p.layers[0].clips[1].at).toBe(20);
+  });
+
+  it('apagar trecho da principal puxa as faixas extras', () => {
+    let p = addLayer(newProject('t', 100), g120, { ...src, bpm: 120, firstBeat: 0, duration: 40 }, 30);
+    p = deleteRange(p, 10, 20);
+    expect(p.layers[0].clips[0].at).toBeCloseTo(20);
+  });
+
+  it('volume, mudo e solo', () => {
+    let p = addSoundLane(newProject('t', 100));
+    const s2 = p.soundLanes[1].id;
+    p = updateLane(p, 'main', { volume: 0.5 });
+    expect(effectiveVolume(p, p.main)).toBe(0.5);
+    p = updateLane(p, s2, { solo: true });
+    expect(effectiveVolume(p, p.main)).toBe(0); // alguém em solo: o resto cala
+    expect(effectiveVolume(p, p.soundLanes[1])).toBe(1);
+    p = updateLane(p, s2, { solo: false, mute: true });
+    expect(effectiveVolume(p, p.soundLanes[1])).toBe(0);
+  });
+
+  it('efeitos por faixa e volume por item', () => {
+    let p = addFxLane(newProject('t', 100), 'mix');
+    const f2 = p.fxLanes[1].id;
+    p = addEffect(p, 'eco', 0, 4);
+    p = addEffect(p, 'eco', 0, 4, f2); // mesmo efeito em outra faixa: os dois ficam
+    expect(p.effects).toHaveLength(2);
+    p = addSound(p, 'buzina', 2);
+    p = setItemGain(p, p.sounds[0].id, 0.4);
+    expect(p.sounds[0].gain).toBe(0.4);
+  });
+
+  it('remover faixa extra redireciona os efeitos dela para "tudo"', () => {
+    let p = addLayer(newProject('t', 100), g120, src, 0);
+    const id = p.layers[0].id;
+    p = addFxLane(p, id);
+    p = removeLayer(p, id);
+    expect(p.layers).toHaveLength(0);
+    expect(p.fxLanes[1].target).toBe('mix');
+  });
+});

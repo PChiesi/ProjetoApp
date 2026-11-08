@@ -301,6 +301,8 @@ Acrescentam-se à trilha da seção 5: **"Corte seco no funk"**, **"Subindo a en
 - [x] **11 efeitos ao vivo** (Eco, Ping Pong, Dub Echo, Reverb, Flanger, Phaser, Filtro Auto, Trans/Picotar, Roll com "slip", Crush, Ruído) + Freio e **Spinback**; **12 sons** no sampler (novos: Apito, Scratch, Sweep ↑/↓, Sub Drop).
 - [x] **🎬 Aulas**: 34 vídeos do YouTube em 9 temas (PT/EN), marcar como visto, "Buscar mais" e atalho para a lição prática do mesmo tema.
 
+- [x] **Estúdio multipista**: várias faixas de música (outras músicas ou só vocal/instrumental, no BPM do projeto sem mudar o tom), várias faixas de sons e de efeitos (cada faixa de efeitos age em Tudo, na principal ou numa faixa específica); volume, mudo e solo por faixa, volume por som/trecho, volume geral; dividir e mover trechos; mashup salvo na biblioteca.
+
 ### Próximos
 1. Testar com ela: abrir o `Pista.html`, deixar ela tocar sem explicar nada, anotar onde travou.
 2. Testar com a DDJ-FLX4 de verdade (mapa baseado no Mixxx; qualquer controle errado se corrige em ⚙ → "Aprender").

@@ -8,8 +8,10 @@ class PistaPitch extends AudioWorkletProcessor {
   static get parameterDescriptors() {
     return [{ name: 'pitch', defaultValue: 1, minValue: 0.5, maxValue: 2, automationRate: 'k-rate' }];
   }
-  constructor() {
+  constructor(options) {
     super();
+    // "transient": nó do Estúdio que pode ser descartado quando a fonte termina
+    this.transient = !!(options && options.processorOptions && options.processorOptions.transient);
     this.W = Math.round(sampleRate * 0.05);
     this.L = 1 << 15;
     this.buf = [new Float32Array(this.L), new Float32Array(this.L)];
@@ -28,6 +30,9 @@ class PistaPitch extends AudioWorkletProcessor {
   process(inputs, outputs, params) {
     const input = inputs[0];
     const output = outputs[0];
+    // Nó descartável: só "morre" depois que a fonte já tocou e terminou (antes de começar, espera).
+    if (input && input.length > 0) this.seen = true;
+    else if (this.transient && this.seen) return false;
     const p = params.pitch[0];
     const n = output[0].length;
     const W = this.W;
@@ -60,7 +65,7 @@ class PistaPitch extends AudioWorkletProcessor {
 registerProcessor('pista-pitch', PistaPitch);
 `;
 
-export async function loadKeyLock(ctx: AudioContext): Promise<boolean> {
+export async function loadKeyLock(ctx: BaseAudioContext): Promise<boolean> {
   if (!ctx.audioWorklet) return false;
   // Aberto com duplo clique (file://) o navegador só aceita data: URL; em servidor, blob: também serve.
   const urls = [
@@ -78,6 +83,6 @@ export async function loadKeyLock(ctx: AudioContext): Promise<boolean> {
   return false; // sem AudioWorklet: segue sem key lock
 }
 
-export function createShifter(ctx: AudioContext): AudioWorkletNode {
-  return new AudioWorkletNode(ctx, 'pista-pitch', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2] });
+export function createShifter(ctx: BaseAudioContext, transient = false): AudioWorkletNode {
+  return new AudioWorkletNode(ctx, 'pista-pitch', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], processorOptions: { transient } });
 }

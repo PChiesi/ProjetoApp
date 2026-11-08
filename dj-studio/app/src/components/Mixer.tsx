@@ -92,9 +92,7 @@ export function Mixer({ engine }: { engine: AudioEngine }) {
         <Channel engine={engine} id="A" />
         <Fader engine={engine} id="A" />
         <div className="mixer-center">
-          <Level n={2}>
             <Knob label="MASTER" value={m.master} min={0} max={1} center={0.85} bipolar={false} onChange={(v) => engine.set('master', v)} format={(v) => `${Math.round(v * 100)}%`} size={36} />
-          </Level>
           <Meters engine={engine} />
           <Level n={3}>
             <div className="mix-toggles">

@@ -21,6 +21,58 @@ export interface SoundEvent {
   soundId: string;
   at: number;
   gain: number; // 0..1.5
+  /** Faixa de sons onde está. */
+  lane: string;
+}
+
+/** Volume, mudo e solo de uma faixa. */
+export interface Mix {
+  volume: number; // 0..1.5
+  mute: boolean;
+  solo: boolean;
+}
+export const defaultMix = (): Mix => ({ volume: 1, mute: false, solo: false });
+
+export interface SoundLane extends Mix {
+  id: string;
+  name: string;
+}
+
+/** Em que os efeitos de uma faixa de efeitos agem: tudo, a música principal ou uma faixa de música extra. */
+export type FxTarget = string; // 'mix' | 'main' | id de uma camada
+
+export interface FxLane {
+  id: string;
+  name: string;
+  target: FxTarget;
+}
+
+export type PartMode = 'tudo' | 'vocal' | 'instrumental' | 'batida';
+
+/** Um trecho de outra música posicionado na linha do tempo. */
+export interface LayerClip {
+  id: number;
+  /** Onde começa na linha do tempo do projeto (s). */
+  at: number;
+  /** Trecho do áudio de origem (s). */
+  start: number;
+  end: number;
+  gain: number;
+}
+
+/** Faixa de música extra (outra música, ou só o vocal / instrumental dela). */
+export interface Layer extends Mix {
+  id: string;
+  name: string;
+  trackId: string;
+  part: PartMode;
+  /** Tempo da música de origem: a faixa é acelerada/freada para o BPM do projeto (sem mudar o tom). */
+  bpm: number;
+  firstBeat: number;
+  duration: number;
+  /** Velocidade para tocar no BPM do projeto (BPM do projeto ÷ BPM da música). */
+  rate: number;
+  clips: LayerClip[];
 }
 
 export type FxType = 'eco' | 'reverb' | 'abafar' | 'subida' | 'gate' | 'freio' | 'reverse' | 'corte';
@@ -31,6 +83,8 @@ export interface FxRegion {
   type: FxType;
   t0: number;
   t1: number;
+  /** Faixa de efeitos onde está (ela define em que o efeito age). */
+  lane: string;
 }
 
 export const FX_INFO: Record<FxType, { name: string; icon: string; color: string; desc: string }> = {
@@ -53,6 +107,13 @@ export interface EditProject {
   palette: Clip[];
   sounds: SoundEvent[];
   effects: FxRegion[];
+  /** Volume da música principal. */
+  main: Mix;
+  layers: Layer[];
+  soundLanes: SoundLane[];
+  fxLanes: FxLane[];
+  /** Volume geral (0..1.5). */
+  master: number;
 }
 
 export interface Grid {
@@ -72,7 +133,20 @@ let nextId = 1;
 export const newId = () => nextId++;
 
 export function newProject(trackId: string, duration: number): EditProject {
-  return { trackId, blocks: [{ id: newId(), start: 0, end: duration }], fadeIn: 0, fadeOut: 0, palette: [], sounds: [], effects: [] };
+  return {
+    trackId,
+    blocks: [{ id: newId(), start: 0, end: duration }],
+    fadeIn: 0,
+    fadeOut: 0,
+    palette: [],
+    sounds: [],
+    effects: [],
+    main: defaultMix(),
+    layers: [],
+    soundLanes: [{ id: 's1', name: 'Sons 1', ...defaultMix() }],
+    fxLanes: [{ id: 'f1', name: 'Efeitos 1', target: 'main' }],
+    master: 1,
+  };
 }
 
 export const blockLen = (b: Block) => b.end - b.start;
@@ -153,7 +227,7 @@ export function deleteRange(p: EditProject, t0: number, t1: number): EditProject
       return { ...f, t0: shift(f.t0), t1: shift(f.t1) };
     })
     .filter((f) => f.t1 - f.t0 > EPS);
-  return { ...p, blocks: rest, sounds, effects };
+  return { ...p, blocks: rest, sounds, effects, layers: rippleDelete(p, t0, t1) };
 }
 
 export function insertAt(p: EditProject, t: number, ins: Block[]): EditProject {
@@ -168,7 +242,8 @@ export function insertAt(p: EditProject, t: number, ins: Block[]): EditProject {
   const len = ins.reduce((a, b) => a + blockLen(b), 0);
   const sounds = (p.sounds ?? []).map((e) => (e.at >= t - EPS ? { ...e, at: e.at + len } : e));
   const effects = (p.effects ?? []).map((f) => ({ ...f, t0: f.t0 >= t - EPS ? f.t0 + len : f.t0, t1: f.t1 > t + EPS ? f.t1 + len : f.t1 }));
-  return { ...p, blocks: [...bs.slice(0, i), ...copies, ...bs.slice(i)], sounds, effects };
+  const layers = (p.layers ?? []).map((l) => ({ ...l, clips: l.clips.map((c) => (c.at >= t - EPS ? { ...c, at: c.at + len } : c)) }));
+  return { ...p, blocks: [...bs.slice(0, i), ...copies, ...bs.slice(i)], sounds, effects, layers };
 }
 
 export function duplicateRange(p: EditProject, t0: number, t1: number): EditProject {
@@ -286,32 +361,184 @@ export function applyTemplate(id: TemplateId, trackId: string, duration: number,
 
 // ---------- sons e efeitos ----------
 
-export function addSound(p: EditProject, soundId: string, at: number, gain = 1): EditProject {
-  return { ...p, sounds: [...p.sounds, { id: newId(), soundId, at, gain }] };
+const firstSoundLane = (p: EditProject) => p.soundLanes[0]?.id ?? 's1';
+const firstFxLane = (p: EditProject) => p.fxLanes[0]?.id ?? 'f1';
+
+export function addSound(p: EditProject, soundId: string, at: number, gain = 1, lane?: string): EditProject {
+  return { ...p, sounds: [...p.sounds, { id: newId(), soundId, at, gain, lane: lane ?? firstSoundLane(p) }] };
 }
 
-export function addEffect(p: EditProject, type: FxType, t0: number, t1: number): EditProject {
+export function addEffect(p: EditProject, type: FxType, t0: number, t1: number, lane?: string): EditProject {
   if (t1 - t0 < EPS) return p;
-  // O mesmo efeito por cima de outro igual: substitui a parte sobreposta.
-  const others = p.effects.filter((f) => f.type !== type || f.t1 <= t0 || f.t0 >= t1);
-  return { ...p, effects: [...others, { id: newId(), type, t0, t1 }].sort((a, b) => a.t0 - b.t0) };
+  const ln = lane ?? firstFxLane(p);
+  // O mesmo efeito por cima de outro igual, na mesma faixa: substitui a parte sobreposta.
+  const others = p.effects.filter((f) => f.type !== type || f.lane !== ln || f.t1 <= t0 || f.t0 >= t1);
+  return { ...p, effects: [...others, { id: newId(), type, t0, t1, lane: ln }].sort((a, b) => a.t0 - b.t0) };
 }
 
 export function removeItem(p: EditProject, id: number): EditProject {
-  return { ...p, sounds: p.sounds.filter((s) => s.id !== id), effects: p.effects.filter((f) => f.id !== id) };
+  return {
+    ...p,
+    sounds: p.sounds.filter((s) => s.id !== id),
+    effects: p.effects.filter((f) => f.id !== id),
+    layers: p.layers.map((l) => ({ ...l, clips: l.clips.filter((c) => c.id !== id) })),
+  };
+}
+
+/** Muda o volume de um som ou de um trecho de música. */
+export function setItemGain(p: EditProject, id: number, gain: number): EditProject {
+  const g = Math.max(0, Math.min(1.5, gain));
+  return {
+    ...p,
+    sounds: p.sounds.map((s) => (s.id === id ? { ...s, gain: g } : s)),
+    layers: p.layers.map((l) => ({ ...l, clips: l.clips.map((c) => (c.id === id ? { ...c, gain: g } : c)) })),
+  };
+}
+
+/** Move um efeito no tempo (mantém o tamanho) e/ou para outra faixa de efeitos. */
+export function moveEffect(p: EditProject, id: number, t0: number, lane?: string): EditProject {
+  return {
+    ...p,
+    effects: p.effects.map((f) => (f.id === id ? { ...f, t0: Math.max(0, t0), t1: Math.max(0, t0) + (f.t1 - f.t0), lane: lane ?? f.lane } : f)).sort((a, b) => a.t0 - b.t0),
+  };
+}
+
+export function moveSound(p: EditProject, id: number, at: number, lane?: string): EditProject {
+  return { ...p, sounds: p.sounds.map((s) => (s.id === id ? { ...s, at: Math.max(0, at), lane: lane ?? s.lane } : s)) };
+}
+
+// ---------- faixas ----------
+
+let laneCounter = 1;
+const laneId = (prefix: string) => `${prefix}${Date.now().toString(36)}${laneCounter++}`;
+
+export function addSoundLane(p: EditProject): EditProject {
+  return { ...p, soundLanes: [...p.soundLanes, { id: laneId('s'), name: `Sons ${p.soundLanes.length + 1}`, ...defaultMix() }] };
+}
+
+export function addFxLane(p: EditProject, target: FxTarget = 'mix'): EditProject {
+  return { ...p, fxLanes: [...p.fxLanes, { id: laneId('f'), name: `Efeitos ${p.fxLanes.length + 1}`, target }] };
+}
+
+export function removeSoundLane(p: EditProject, id: string): EditProject {
+  if (p.soundLanes.length <= 1) return p;
+  return { ...p, soundLanes: p.soundLanes.filter((l) => l.id !== id), sounds: p.sounds.filter((s) => s.lane !== id) };
+}
+
+export function removeFxLane(p: EditProject, id: string): EditProject {
+  if (p.fxLanes.length <= 1) return p;
+  return { ...p, fxLanes: p.fxLanes.filter((l) => l.id !== id), effects: p.effects.filter((f) => f.lane !== id) };
+}
+
+/** Atualiza volume/mudo/solo (ou nome/alvo) de qualquer faixa. 'main' = música principal. */
+export function updateLane(p: EditProject, id: string, patch: Partial<Mix> & { name?: string; target?: FxTarget }): EditProject {
+  if (id === 'main') return { ...p, main: { ...p.main, ...patch } };
+  return {
+    ...p,
+    layers: p.layers.map((l) => (l.id === id ? { ...l, ...patch } : l)),
+    soundLanes: p.soundLanes.map((l) => (l.id === id ? { ...l, ...patch } : l)),
+    fxLanes: p.fxLanes.map((l) => (l.id === id ? { ...l, ...patch } : l)),
+  };
+}
+
+export const clipLength = (c: LayerClip, rate: number) => (c.end - c.start) / rate;
+
+export interface LayerSource {
+  trackId: string;
+  name: string;
+  part: PartMode;
+  bpm: number;
+  firstBeat: number;
+  duration: number;
+}
+
+/** Nova faixa de música: a música inteira, começando no "1" dela, no ponto `at`. */
+export function addLayer(p: EditProject, g: Grid, src: LayerSource, at: number): EditProject {
+  const id = laneId('m');
+  const clip: LayerClip = { id: newId(), at, start: src.firstBeat, end: src.duration, gain: 1 };
+  // Dobro/metade de BPM (75 ↔ 150) conta como o mesmo andamento
+  let rate = g.bpm / (src.bpm || g.bpm);
+  if (rate > 1.5) rate /= 2;
+  else if (rate < 0.75) rate *= 2;
+  return { ...p, layers: [...p.layers, { id, ...src, ...defaultMix(), rate, clips: [clip] }] };
+}
+
+export function removeLayer(p: EditProject, id: string): EditProject {
+  return {
+    ...p,
+    layers: p.layers.filter((l) => l.id !== id),
+    // faixas de efeitos que agiam nela passam a agir em tudo
+    fxLanes: p.fxLanes.map((f) => (f.target === id ? { ...f, target: 'mix' } : f)),
+  };
+}
+
+export function moveClip(p: EditProject, layerId: string, clipId: number, at: number): EditProject {
+  return { ...p, layers: p.layers.map((l) => (l.id !== layerId ? l : { ...l, clips: l.clips.map((c) => (c.id === clipId ? { ...c, at: Math.max(0, at) } : c)) })) };
+}
+
+/** Divide um trecho no ponto `t` da linha do tempo. */
+export function splitClip(p: EditProject, layerId: string, clipId: number, t: number): EditProject {
+  return {
+    ...p,
+    layers: p.layers.map((l) => {
+      if (l.id !== layerId) return l;
+      const r = l.rate;
+      const clips: LayerClip[] = [];
+      for (const c of l.clips) {
+        const end = c.at + clipLength(c, r);
+        if (c.id === clipId && t > c.at + EPS && t < end - EPS) {
+          const cut = c.start + (t - c.at) * r;
+          clips.push({ ...c, end: cut }, { ...c, id: newId(), at: t, start: cut });
+        } else clips.push(c);
+      }
+      return { ...l, clips };
+    }),
+  };
+}
+
+/** Apagar um trecho da música principal também "puxa" as faixas extras para a esquerda. */
+function rippleDelete(p: EditProject, t0: number, t1: number): Layer[] {
+  const len = t1 - t0;
+  return (p.layers ?? []).map((l) => {
+    const clips: LayerClip[] = [];
+    for (const c of l.clips) {
+      if (c.at >= t1 - EPS) clips.push({ ...c, at: c.at - len });
+      else if (c.at >= t0 - EPS) {
+        // começava dentro do trecho apagado: perde o pedaço apagado e passa a começar em t0
+        clips.push({ ...c, at: t0, start: c.start + (t1 - c.at) * l.rate });
+      } else clips.push(c);
+    }
+    return { ...l, clips: clips.filter((c) => c.end - c.start > EPS) };
+  });
+}
+
+/** Onde o projeto termina (música principal, faixas extras e sons). */
+export function timelineEnd(p: EditProject, g: Grid, soundDur: (id: string) => number = () => 0): number {
+  let end = projectLength(p);
+  void g;
+  for (const l of p.layers) for (const c of l.clips) end = Math.max(end, c.at + clipLength(c, l.rate));
+  for (const s of p.sounds) end = Math.max(end, s.at + soundDur(s.soundId));
+  return end;
+}
+
+/** Volume efetivo de uma faixa considerando mudo e solo de todas. */
+export function effectiveVolume(p: EditProject, m: Mix): number {
+  const anySolo = p.main.solo || p.layers.some((l) => l.solo) || p.soundLanes.some((l) => l.solo);
+  if (m.mute || (anySolo && !m.solo)) return 0;
+  return m.volume;
 }
 
 /** "Saída com eco": eco no último compasso e corte depois — o eco "voa" sozinho no final. */
-export function echoOut(p: EditProject, g: Grid, at: number): EditProject {
+export function echoOut(p: EditProject, g: Grid, at: number, lane?: string): EditProject {
   const b = barLen(g);
-  return addEffect(addEffect(p, 'eco', Math.max(0, at - b), at), 'corte', at, Math.min(projectLength(p), at + 2 * b));
+  return addEffect(addEffect(p, 'eco', Math.max(0, at - b), at, lane), 'corte', at, Math.min(projectLength(p), at + 2 * b), lane);
 }
 
 /** "Subida pro drop": 4 compassos de subida terminando no ponto do drop. */
-export function buildUp(p: EditProject, g: Grid, drop: number, riserId?: string): EditProject {
+export function buildUp(p: EditProject, g: Grid, drop: number, riserId?: string, lane?: string): EditProject {
   const b = barLen(g);
   const t0 = Math.max(0, drop - 4 * b);
-  let q = addEffect(p, 'subida', t0, drop);
+  let q = addEffect(p, 'subida', t0, drop, lane);
   if (riserId) q = addSound(q, riserId, t0, 0.8);
   return q;
 }

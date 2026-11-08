@@ -786,6 +786,7 @@ export default function App() {
           <Studio
             engine={engine}
             track={studioTrack}
+            library={tracks}
             onExit={() => setView('decks')}
             onSaved={(t) => {
               setTracks((ts) => [...ts, t]);
