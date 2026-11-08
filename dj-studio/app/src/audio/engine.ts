@@ -7,6 +7,16 @@ import type { Section } from '../studio/edit';
 import { createShifter, loadKeyLock } from './keylock';
 import { impulse } from '../studio/render';
 
+export type StemId = 'vocals' | 'drums' | 'bass' | 'other';
+export const STEM_IDS: StemId[] = ['vocals', 'drums', 'bass', 'other'];
+export const STEM_INFO: Record<StemId, { name: string; icon: string }> = {
+  vocals: { name: 'Vocal', icon: '🎤' },
+  drums: { name: 'Batida', icon: '🥁' },
+  bass: { name: 'Baixo', icon: '🎸' },
+  other: { name: 'Melodia', icon: '🎹' },
+};
+export type StemSet = Record<StemId, AudioBuffer>;
+
 export type DeckFxType = 'eco' | 'reverb' | 'flanger' | 'picotar';
 export interface DeckFxState {
   type: DeckFxType;
@@ -181,13 +191,55 @@ export class Deck {
   private rate = 1;
   private nudgeFactor = 1;
   private source: AudioBufferSourceNode | null = null;
+  /** Fontes extras quando os stems estão tocando (a principal é `source`). */
+  private extra: AudioBufferSourceNode[] = [];
+  /** Entrada do deck: tudo que toca passa por aqui antes do key lock / canal. */
+  private mixIn: GainNode;
+  /** Stems separados desta música (null = toca a música inteira). */
+  stems: StemSet | null = null;
+  stemOn: Record<StemId, boolean> = { vocals: true, drums: true, bass: true, other: true };
+  private stemGains: Record<StemId, GainNode>;
 
   constructor(
     readonly id: DeckId,
     private ctx: AudioContext,
     readonly channel: Channel,
     private changed: () => void,
-  ) {}
+  ) {
+    this.mixIn = ctx.createGain();
+    this.mixIn.connect(channel.input);
+    this.stemGains = Object.fromEntries(
+      STEM_IDS.map((k) => {
+        const g = ctx.createGain();
+        g.connect(this.mixIn);
+        return [k, g];
+      }),
+    ) as Record<StemId, GainNode>;
+  }
+
+  private all(): AudioBufferSourceNode[] {
+    return this.source ? [this.source, ...this.extra] : [];
+  }
+
+  /** Liga os stems desta música (ou null para voltar à música inteira). */
+  setStems(set: StemSet | null) {
+    this.stems = set;
+    this.stemOn = { vocals: true, drums: true, bass: true, other: true };
+    for (const k of STEM_IDS) this.stemGains[k].gain.value = 1;
+    if (this.playing) {
+      const pos = this.position();
+      this.stopSource();
+      this.startSource(pos);
+    }
+    this.changed();
+  }
+
+  toggleStem(k: StemId, on?: boolean) {
+    if (!this.stems) return;
+    this.stemOn = { ...this.stemOn, [k]: on ?? !this.stemOn[k] };
+    this.stemGains[k].gain.setTargetAtTime(this.stemOn[k] ? 1 : 0, this.ctx.currentTime, 0.015);
+    this.changed();
+  }
 
   get bpm(): number {
     return this.track ? this.track.bpm * this.rate : 0;
@@ -297,10 +349,11 @@ export class Deck {
     if (this.playing && this.source) {
       this.offset = pos;
       this.anchor = this.ctx.currentTime;
-      const curr = this.source;
-      curr.loopStart = start;
-      curr.loopEnd = end;
-      curr.loop = true;
+      for (const curr of this.all()) {
+        curr.loopStart = start;
+        curr.loopEnd = end;
+        curr.loop = true;
+      }
       // Encolher o loop pode deixar a agulha fora dele: reinicia no ponto certo.
       if (moved) this.restartAt(pos);
     } else {
@@ -319,7 +372,7 @@ export class Deck {
     if (this.playing) {
       this.offset = this.position();
       this.anchor = this.ctx.currentTime;
-      if (this.source) this.source.loop = false;
+      for (const x of this.all()) x.loop = false;
     }
     this.loop = null;
     this.changed();
@@ -333,6 +386,9 @@ export class Deck {
     this.rate = 1;
     this.synced = false;
     this.loop = null;
+    this.stems = null;
+    this.stemOn = { vocals: true, drums: true, bass: true, other: true };
+    for (const k of STEM_IDS) this.stemGains[k].gain.value = 1;
     this.cuePoint = track.firstBeat;
     this.offset = track.firstBeat;
     this.changed();
@@ -414,7 +470,7 @@ export class Deck {
     }
     this.rate = rate;
     this.tempo = Math.max(-1, Math.min(1, (rate - 1) / this.range));
-    if (this.source) this.source.playbackRate.setTargetAtTime(this.playbackRate, this.ctx.currentTime, 0.01);
+    for (const x of this.all()) x.playbackRate.setTargetAtTime(this.playbackRate, this.ctx.currentTime, 0.01);
     this.updatePitch();
     this.changed();
   }
@@ -426,7 +482,7 @@ export class Deck {
       this.anchor = this.ctx.currentTime;
     }
     this.nudgeFactor = 1 + dir * 0.04;
-    if (this.source) this.source.playbackRate.setTargetAtTime(this.playbackRate, this.ctx.currentTime, 0.005);
+    for (const x of this.all()) x.playbackRate.setTargetAtTime(this.playbackRate, this.ctx.currentTime, 0.005);
     this.updatePitch();
   }
 
@@ -439,10 +495,11 @@ export class Deck {
     this.offset = this.position();
     this.anchor = t;
     this.braking = true;
-    const src = this.source;
-    src.playbackRate.cancelScheduledValues(t);
-    src.playbackRate.setValueAtTime(this.playbackRate, t);
-    src.playbackRate.linearRampToValueAtTime(0.001, t + dur);
+    for (const src of this.all()) {
+      src.playbackRate.cancelScheduledValues(t);
+      src.playbackRate.setValueAtTime(this.playbackRate, t);
+      src.playbackRate.linearRampToValueAtTime(0.001, t + dur);
+    }
     if (this.shifter) this.shifter.parameters.get('pitch')!.setValueAtTime(1, t); // o tom cai junto: é o efeito
     const startRate = this.playbackRate;
     window.setTimeout(() => {
@@ -468,7 +525,7 @@ export class Deck {
       this.anchor = this.ctx.currentTime;
     }
     this.nudgeFactor = 1 + Math.max(-0.25, Math.min(0.25, delta * 0.012));
-    if (this.source) this.source.playbackRate.setTargetAtTime(this.playbackRate, this.ctx.currentTime, 0.005);
+    for (const x of this.all()) x.playbackRate.setTargetAtTime(this.playbackRate, this.ctx.currentTime, 0.005);
     this.updatePitch();
     clearTimeout(this.bendTimer);
     this.bendTimer = window.setTimeout(() => this.nudge(0), 70);
@@ -484,10 +541,8 @@ export class Deck {
   attachShifter(node: AudioWorkletNode) {
     this.shifter = node;
     node.connect(this.channel.input);
-    if (this.source) {
-      this.source.disconnect();
-      this.source.connect(node);
-    }
+    this.mixIn.disconnect();
+    this.mixIn.connect(node);
     this.updatePitch();
   }
 
@@ -519,33 +574,44 @@ export class Deck {
   private startSource(at: number) {
     if (!this.track) return;
     if (!this.track.buffer) return;
-    const src = this.ctx.createBufferSource();
-    src.buffer = this.track.buffer;
-    src.playbackRate.value = this.playbackRate;
-    if (this.loop) {
-      src.loopStart = this.loop.start;
-      src.loopEnd = this.loop.end;
-      src.loop = true;
-    }
-    src.connect(this.shifter ?? this.channel.input);
+    // Com stems: uma fonte por parte, todas começando no mesmo instante; sem stems: a música inteira.
+    const plan: [AudioBuffer, AudioNode][] = this.stems
+      ? STEM_IDS.map((k) => [this.stems![k], this.stemGains[k]] as [AudioBuffer, AudioNode])
+      : [[this.track.buffer, this.mixIn]];
+    const when = this.ctx.currentTime + (plan.length > 1 ? 0.01 : 0);
+    const made = plan.map(([buf, dest]) => {
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      src.playbackRate.value = this.playbackRate;
+      if (this.loop) {
+        src.loopStart = this.loop.start;
+        src.loopEnd = this.loop.end;
+        src.loop = true;
+      }
+      src.connect(dest);
+      src.start(when, Math.min(at, buf.duration - 0.001));
+      return src;
+    });
+    const src = made[0];
     src.onended = () => {
       if (this.source === src) {
         this.offset = this.track?.duration ?? 0;
-        this.source = null;
+        this.stopSource();
         this.playing = false;
         this.changed();
       }
     };
-    src.start(0, at);
     this.source = src;
+    this.extra = made.slice(1);
     this.offset = at;
-    this.anchor = this.ctx.currentTime;
+    this.anchor = when;
   }
 
   private stopSource() {
-    if (this.source) {
-      const s = this.source;
-      this.source = null;
+    const list = this.all();
+    this.source = null;
+    this.extra = [];
+    for (const s of list) {
       try {
         s.stop();
       } catch {

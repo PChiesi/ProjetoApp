@@ -435,3 +435,15 @@ kbd { background: var(--panel-2); border: 1px solid var(--line); border-bottom-w
 .set-row { display: grid; grid-template-columns: 1.4fr 0.8fr 1fr 0.7fr; gap: 8px; text-align: left; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; cursor: pointer; font-variant-numeric: tabular-nums; }
 .set-row:hover { border-color: var(--accent); }
 .chip.auto-cues { color: var(--warn); }
+
+/* ---------- stems ---------- */
+.stems { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 8px; }
+.stem { border: 1px solid var(--line); background: var(--panel-2); border-radius: 9px; padding: 6px 10px; font-weight: 800; font-size: 12px; cursor: pointer; opacity: 0.5; min-height: 34px; transition: opacity .1s, background .1s; }
+.stem.on { opacity: 1; }
+.stem-vocals.on { background: color-mix(in srgb, #f472b6 30%, var(--panel-2)); border-color: #f472b6; }
+.stem-drums.on { background: color-mix(in srgb, #fbbf24 28%, var(--panel-2)); border-color: #fbbf24; }
+.stem-bass.on { background: color-mix(in srgb, #4d7cff 30%, var(--panel-2)); border-color: #4d7cff; }
+.stem-other.on { background: color-mix(in srgb, #52e3a4 26%, var(--panel-2)); border-color: #52e3a4; }
+.stems.busy small { font-size: 12px; color: var(--muted); }
+.stem-progress { flex: 1; min-width: 120px; height: 8px; background: var(--panel-2); border-radius: 999px; overflow: hidden; }
+.stem-progress span { display: block; height: 100%; background: linear-gradient(90deg, var(--deck-a), var(--deck-b)); transition: width .3s; }

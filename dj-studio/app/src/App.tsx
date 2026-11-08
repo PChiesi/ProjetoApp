@@ -23,6 +23,8 @@ import { Automix } from './coach/automix';
 import { AutoBar } from './components/AutoBar';
 import { SetRecorder, type SetReport } from './coach/report';
 import { SetReportModal, SetsHistory } from './components/SetReportModal';
+import { hasStems, loadStems, modelCached, separateTrack } from './audio/stems';
+import type { StemJob } from './components/StemsPanel';
 import { SoundBank } from './studio/sounds';
 
 const engine = new AudioEngine();
@@ -70,6 +72,9 @@ export default function App() {
   const [libSel, setLibSel] = useState<string | null>(null);
   const syncFailRef = useRef<(id: DeckId) => void>(() => {});
   const samplerRef = useRef<(i: number) => void>(() => {});
+  // ---- stems ----
+  const [stemJob, setStemJob] = useState<StemJob | null>(null);
+  const [stemReady, setStemReady] = useState<Record<string, boolean>>({});
   // ---- relatório pós-set ----
   const setRec = useRef(new SetRecorder());
   const [report, setReport] = useState<SetReport | null>(null);
@@ -251,6 +256,42 @@ export default function App() {
       del('tracks', t.id);
     },
     [toast, studioTrack],
+  );
+
+  // Ao carregar uma música num deck, liga os stems se ela já foi separada.
+  const deckTrackIds = `${engine.decks.A.track?.id}|${engine.decks.B.track?.id}`;
+  useEffect(() => {
+    for (const d of ['A', 'B'] as DeckId[]) {
+      const dk = engine.decks[d];
+      const t = dk.track;
+      if (!t || dk.stems) continue;
+      hasStems(t.id).then(async (has) => {
+        setStemReady((r) => ({ ...r, [t.id]: has }));
+        if (!has) return;
+        const set = await loadStems(engine.ctx, t.id).catch(() => null);
+        if (set && dk.track === t && !dk.stems) dk.setStems(set);
+      });
+    }
+  }, [deckTrackIds]);
+
+  const separate = useCallback(
+    async (d: DeckId) => {
+      const t = engine.decks[d].track;
+      if (!t || stemJob) return;
+      if (!(await modelCached()) && !window.confirm('Na primeira vez o Pista baixa o modelo de IA que separa as músicas (cerca de 172 MB, precisa de internet). Depois funciona sem baixar de novo. Continuar?')) return;
+      setStemJob({ trackId: t.id, status: { phase: 'preparando' } });
+      try {
+        const set = await separateTrack(engine.ctx, t, (status) => setStemJob({ trackId: t.id, status }));
+        setStemReady((r) => ({ ...r, [t.id]: true }));
+        for (const dk of [engine.decks.A, engine.decks.B]) if (dk.track === t) dk.setStems(set);
+        toast(`Stems prontos para "${t.title}"! Experimente desligar o 🎤 Vocal (instrumental) ou deixar só ele (acapella).`);
+      } catch (err) {
+        toast(`Não consegui separar: ${err instanceof Error ? err.message : 'erro desconhecido'}. Verifique a internet na primeira vez (download do modelo).`);
+      } finally {
+        setStemJob(null);
+      }
+    },
+    [stemJob, toast],
   );
 
   // Salva hot cues e ajustes de grid (1 s depois da última mudança).
@@ -682,12 +723,12 @@ export default function App() {
         <main className="console">
           <div className="deck-col">
             <OverviewWaveform deck={engine.decks.A} color="#22d3ee" />
-            <DeckPanel engine={engine} id="A" onDropTrack={(id, tid) => loadById(id, tid)} onDropFiles={(id, f) => addFiles(f, id)} onSyncFail={syncFail} />
+            <DeckPanel engine={engine} id="A" onDropTrack={(id, tid) => loadById(id, tid)} onDropFiles={(id, f) => addFiles(f, id)} onSyncFail={syncFail} stemJob={stemJob} stemReady={engine.decks.A.track ? stemReady[engine.decks.A.track.id] ?? null : null} onSeparate={separate} />
           </div>
           <Mixer engine={engine} />
           <div className="deck-col">
             <OverviewWaveform deck={engine.decks.B} color="#f472b6" />
-            <DeckPanel engine={engine} id="B" onDropTrack={(id, tid) => loadById(id, tid)} onDropFiles={(id, f) => addFiles(f, id)} onSyncFail={syncFail} />
+            <DeckPanel engine={engine} id="B" onDropTrack={(id, tid) => loadById(id, tid)} onDropFiles={(id, f) => addFiles(f, id)} onSyncFail={syncFail} stemJob={stemJob} stemReady={engine.decks.B.track ? stemReady[engine.decks.B.track.id] ?? null : null} onSeparate={separate} />
           </div>
         </main>
 

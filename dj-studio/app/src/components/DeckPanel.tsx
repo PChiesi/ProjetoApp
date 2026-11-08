@@ -5,11 +5,15 @@ import { fmtTime, useFrame } from '../hooks';
 import { Level } from './Level';
 import { Pads } from './Pads';
 import { DeckFxPanel } from './DeckFxPanel';
+import { StemsPanel, type StemJob } from './StemsPanel';
 
 interface Props {
   engine: AudioEngine;
   id: DeckId;
   onSyncFail: (id: DeckId) => void;
+  stemJob?: StemJob | null;
+  stemReady?: boolean | null;
+  onSeparate?: (id: DeckId) => void;
   onDropTrack: (id: DeckId, trackId: string) => void;
   onDropFiles: (id: DeckId, files: FileList) => void;
 }
@@ -21,7 +25,7 @@ const MATCH_LABEL = {
   desconhecido: { text: '', cls: '', icon: '' },
 } as const;
 
-export function DeckPanel({ engine, id, onDropTrack, onDropFiles, onSyncFail }: Props) {
+export function DeckPanel({ engine, id, onDropTrack, onDropFiles, onSyncFail, stemJob = null, stemReady = null, onSeparate }: Props) {
   const deck = engine.decks[id];
   const other = engine.other(id);
   const t = deck.track;
@@ -191,6 +195,8 @@ export function DeckPanel({ engine, id, onDropTrack, onDropFiles, onSyncFail }: 
           </button>
         </Level>
       </div>
+
+      {onSeparate && <StemsPanel engine={engine} id={id} job={stemJob} ready={stemReady} onSeparate={onSeparate} />}
 
       <Level n={2}>
         <Pads deck={deck} />
