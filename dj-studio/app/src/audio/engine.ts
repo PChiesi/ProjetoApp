@@ -321,6 +321,7 @@ export class Deck {
     this.changed();
   }
 
+  onPlayHook?: (trackId: string) => void;
   /** Chamado ao dar play num deck sincronizado (o motor alinha as batidas na hora). */
   onSyncedPlay?: () => void;
 
@@ -329,6 +330,7 @@ export class Deck {
     if (this.offset >= this.track.duration - 0.05) this.offset = this.cuePoint;
     this.startSource(this.offset);
     this.playing = true;
+    this.onPlayHook?.(this.track.id);
     if (this.synced) this.onSyncedPlay?.();
     this.changed();
   }
@@ -563,6 +565,8 @@ export class AudioEngine {
     crossfader: -1,
     master: 0.85,
   };
+  /** Músicas que já tocaram nesta sessão (para não sugerir de novo). */
+  readonly played = new Set<string>();
   /** Iguala o volume das músicas automaticamente. */
   autoGain = true;
   /** Efeito ao vivo de cada deck. */
@@ -639,6 +643,7 @@ export class AudioEngine {
       A: new Deck('A', this.ctx, new Channel(this.ctx, this.bus, this.cueBus), notify),
       B: new Deck('B', this.ctx, new Channel(this.ctx, this.bus, this.cueBus), notify),
     };
+    this.decks.A.onPlayHook = this.decks.B.onPlayHook = (id) => this.played.add(id);
     this.decks.A.onSyncedPlay = () => this.decks.B.playing && this.alignPhase('A');
     this.decks.B.onSyncedPlay = () => this.decks.A.playing && this.alignPhase('B');
     this.applyAll();

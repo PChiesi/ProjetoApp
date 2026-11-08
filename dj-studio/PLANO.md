@@ -213,7 +213,7 @@ Fundo escuro (cabine), um tom de destaque por deck (ex.: A = ciano, B = magenta)
 | **3. Estúdio v1 + criatividade** (P1) | **Editor de faixas** (cortar, estender, apagar, fades, inserir sons e efeitos, exportar), efeitos, sampler com vinheta, lições guiadas 1–12. | Ela faz a própria "versão estendida" de uma música e toca no set. | |
 | **4. Inteligência** (P2) | Stems, transições prontas, sugestão da próxima música, playlists/histórico, Automix que explica, relatório pós-set. | Set de 30 min com transições entre pop, rock e funk. | |
 | **5. Remix** (P3) | Estúdio multipista (mashup / "Versão funk"), batidas prontas (tamborzão), grid dinâmico, slicer, Flux. | Exportar um mashup próprio. | |
-| **6. Desktop** | Instalador Windows com Tauri, atalho na área de trabalho, pastas de música. | Instalar com duplo clique. | |
+| **6. Desktop** | Instalador Windows com Tauri, atalho na área de trabalho, pastas de música. | Instalar com duplo clique. | ✅ instalador gerado no GitHub Actions |
 
 **Teste com usuária real desde a fase 1**: a cada entrega, observar ela usando (sem explicar nada), anotar onde travou, corrigir. Esse ciclo é o que torna a UX boa.
 
@@ -283,10 +283,16 @@ Acrescentam-se à trilha da seção 5: **"Corte seco no funk"**, **"Subindo a en
 - [x] **DDJ-FLX4**: play, cue, sync, fone, load, browse, tempo (14 bits), volume, ganho, EQ, filtro, crossfader, pratos, pads (hot cue, beat loop, beat jump, sampler), loops, luzes; modo **Aprender** para remapear qualquer controle; **pré-escuta no fone** (fone dividido ou placa de 4 canais da controladora) e escolha da placa de som.
 - [x] **Estúdio v1**: abrir qualquer música (✎ na biblioteca), selecionar compassos arrastando, recortar/copiar/repetir/apagar, paleta de trechos para colar, Intro +8 / Final +8, fades em compassos, seções coloridas (intro/parte/breakdown/outro), modelos "Versão estendida", "Versão rádio" e "Pro baile", desfazer/refazer, ouvir, **salvar na biblioteca** (já toca nos decks) e **baixar WAV**.
 
+- [x] **App de desktop Windows (Tauri 2)**: instalador (setup .exe / .msi, ~3 MB) e `Pista.exe` gerados automaticamente no GitHub Actions; "Salvar como" nativo.
+- [x] **Efeitos ao vivo** por deck (eco 1/2·3/4·1, reverb, flanger, picotar) + **freio de vinil**.
+- [x] **Sampler na tela**: 8 pads (teclas A–K), entram no tempo da música, vinheta nova vai direto para um pad.
+- [x] **15 lições guiadas** com verificação automática de cada passo, destaque do controle e progresso salvo.
+- [x] **✨ Próxima música**: sugestões por BPM (inclui dobro/metade), tom, gênero e energia, com o motivo de cada uma.
+
 ### Próximos
 1. Testar com ela: abrir o `Pista.html`, deixar ela tocar sem explicar nada, anotar onde travou.
 2. Testar com a DDJ-FLX4 de verdade (mapa baseado no Mixxx; qualquer controle errado se corrige em ⚙ → "Aprender").
-3. Seguir o backlog da **seção 12**: efeitos ao vivo nos decks (item 13), painel do sampler (14), lições guiadas (15) e depois P2 (stems, transições prontas…).
+3. Seguir o backlog da **seção 12**: P2 — stems (16), transições prontas (17), cue automático (19), playlists/histórico (20), Automix que explica (21) e relatório pós-set (22).
 
 ---
 
@@ -377,16 +383,16 @@ Esforço: P = pequeno (dias), M = médio (1–2 semanas), G = grande (3+ semanas
 | 10 | **Estúdio v1: editor de faixas** — cortar, estender, apagar, mover, fades, exportar (seção 13) | Fazer a própria versão estendida/rádio/"pro baile". | G | ✅ (MP3 pendente; exporta WAV) |
 | 11 | **Estúdio: inserir sons** — vinheta gravada no microfone, efeitos sonoros, sons próprios | Toda DJ de funk tem vinheta. | M | ✅ |
 | 12 | **Estúdio: efeitos em trechos** — eco, reverb, filtro, freio, reverse, gate, volume | Criar viradas e saídas na própria faixa. | M | ✅ |
-| 13 | **Efeitos ao vivo** no tempo da música (eco, reverb, flanger, filtro, freio, spinback) | Todos os softwares têm; essenciais nas transições. | M | ⏳ |
-| 14 | **Sampler** com 8 pads (a vinheta dela, buzina, sirene, risers) | Uso ao vivo dos sons do Estúdio. | P | parcial (pads SAMPLER da FLX4 já tocam os sons; falta painel na tela) |
-| 15 | **Trilha de lições** guiadas com progresso (seções 5.1 e 9.2) | O diferencial da Pista. | M | ⏳ |
+| 13 | **Efeitos ao vivo** no tempo da música (eco, reverb, flanger, filtro, freio, spinback) | Todos os softwares têm; essenciais nas transições. | M | ✅ (eco, reverb, flanger, picotar, freio) |
+| 14 | **Sampler** com 8 pads (a vinheta dela, buzina, sirene, risers) | Uso ao vivo dos sons do Estúdio. | P | ✅ (teclas A–K, no tempo) |
+| 15 | **Trilha de lições** guiadas com progresso (seções 5.1 e 9.2) | O diferencial da Pista. | M | ✅ (15 lições) |
 
 ### P2 — Inteligência que ensina
 | # | Funcionalidade | Inspiração | Esforço |
 |---|---|---|---|
 | 16 | **Stems** (vocal / batida / baixo / melodia) nos decks e no Estúdio | Todos menos Mixxx | G |
 | 17 | **Transições prontas** com explicação | djay Crossfader Fusion | M |
-| 18 | **Sugestão da próxima música** (BPM, tom, energia, gênero) | rekordbox Related Tracks | P |
+| 18 | **Sugestão da próxima música** (BPM, tom, energia, gênero) ✅ | rekordbox Related Tracks | P |
 | 19 | **Cue automático** (intro, refrão, breakdown, outro) | rekordbox Intelligent Cue | M |
 | 20 | **Playlists, histórico de sets** e tags de energia | Todos | P |
 | 21 | **Automix que explica** | djay, VirtualDJ, Mixxx | M |

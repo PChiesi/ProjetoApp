@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AudioEngine, DeckId, Track } from '../audio/engine';
 import { camelotMatch } from '../audio/beat';
 import { AUDIO_ACCEPT } from '../audio/library';
+import { energyOf, suggestNext, type Suggestion } from '../audio/suggest';
 import { fmtTime } from '../hooks';
 
 interface Props {
@@ -17,7 +18,15 @@ interface Props {
   editing?: string;
 }
 
-type Filter = 'todas' | 'A' | 'B';
+type Filter = 'sugestoes' | 'todas' | 'A' | 'B';
+
+const energyCache = new WeakMap<Track, number>();
+const energy = (t: Track) => {
+  let e = energyCache.get(t);
+  if (e === undefined) energyCache.set(t, (e = energyOf(t.waveform)));
+  return e;
+};
+const asSuggest = (t: Track) => ({ id: t.id, bpm: t.bpm, key: t.key, genre: t.genre, energy: energy(t) });
 
 /** Combina com o deck: BPM até ±6% (ou dobro/metade) e tom compatível. */
 function fits(t: Track, ref: Track | null): boolean {
@@ -43,15 +52,28 @@ export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, onRe
   const live = (['A', 'B'] as DeckId[]).filter((d) => engine.decks[d].playing).sort((x, y) => engine.audibility(y) - engine.audibility(x))[0];
   const liveRef = live ? engine.decks[live].track : refA;
 
+  // Sugestões a partir da música que está no ar
+  const suggestions = useMemo(() => {
+    const m = new Map<string, Suggestion & { rank: number }>();
+    if (!liveRef) return m;
+    suggestNext(asSuggest(liveRef), tracks.map(asSuggest), engine.played).forEach((x, i) => m.set(x.id, { ...x, rank: i }));
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveRef, tracks, engine.played.size]);
+
   const list = useMemo(() => {
     const s = q.trim().toLowerCase();
+    if (filter === 'sugestoes')
+      return tracks
+        .filter((t) => suggestions.has(t.id) && (!s || `${t.title} ${t.artist} ${t.genre ?? ''}`.toLowerCase().includes(s)))
+        .sort((a, b) => suggestions.get(a.id)!.rank - suggestions.get(b.id)!.rank);
     return tracks.filter((t) => {
       if (s && !`${t.title} ${t.artist} ${t.genre ?? ''}`.toLowerCase().includes(s)) return false;
       if (filter === 'A') return fits(t, refA);
       if (filter === 'B') return fits(t, refB);
       return true;
     });
-  }, [tracks, q, filter, refA, refB]);
+  }, [tracks, q, filter, refA, refB, suggestions]);
 
   return (
     <section className="library" aria-label="Biblioteca">
@@ -61,6 +83,7 @@ export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, onRe
         <div className="chips" role="tablist">
           {(
             [
+              ['sugestoes', '✨ Próxima'],
               ['todas', 'Todas'],
               ['A', 'Combinam com A'],
               ['B', 'Combinam com B'],
@@ -132,8 +155,19 @@ export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, onRe
                 </button>
               </span>
               <span>
-                <strong>{t.title}</strong>
-                <small>{t.artist}</small>
+                <strong>
+                  {filter === 'sugestoes' && (suggestions.get(t.id)?.rank ?? 9) < 3 && <span className="top-pick">★</span>}
+                  {t.title}
+                </strong>
+                <small>
+                  {t.artist}
+                  {filter === 'sugestoes' &&
+                    suggestions.get(t.id)?.reasons.map((r) => (
+                      <span key={r} className={`why ${r.startsWith('BPM longe') || r === 'já tocou' ? 'meh' : ''}`}>
+                        {r}
+                      </span>
+                    ))}
+                </small>
               </span>
               <span>{t.genre ?? '—'}</span>
               <span className="num">{t.bpm.toFixed(t.bpm % 1 ? 1 : 0)}</span>
@@ -150,7 +184,13 @@ export function Library({ engine, tracks, pending, onLoad, onFiles, onEdit, onRe
           );
         })}
         {list.length === 0 && pending.length === 0 && (
-          <p className="lib-empty">{filter === 'todas' ? 'Nenhuma música encontrada.' : `Carregue uma música no deck ${filter} para ver as que combinam.`}</p>
+          <p className="lib-empty">
+            {filter === 'todas'
+              ? 'Nenhuma música encontrada.'
+              : filter === 'sugestoes'
+                ? 'Toque uma música para ver as melhores opções para entrar depois dela.'
+                : `Carregue uma música no deck ${filter} para ver as que combinam.`}
+          </p>
         )}
       </div>
       <p className="lib-hint">Dica: arraste arquivos MP3/WAV/FLAC do seu computador para qualquer lugar da janela.</p>
